@@ -50,4 +50,4 @@ def lerpImage(imageA, imageB, mu, outfile):
     imOut.save(outfile)
     print "Wrote to image file %s" % outfile
 
-lerpImage("imageA.png", "imageB.png", 0.5, "lerpedImage.png")
+lerpImage("imageA.png", "imageB.png", 0.5, "../output/lerpedImage.png")
