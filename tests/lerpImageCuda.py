@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# Tests whether PyCUDA is working
+
 import numpy as np
 from PIL import Image
 import pycuda.driver as cuda

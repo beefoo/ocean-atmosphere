@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# Tests whether PyOpenCL is working
+
 import numpy as np
 import os
 from PIL import Image

@@ -1,3 +1,5 @@
 node_modules/
 output/*
 !output/.keep
+data/raw/*
+!data/raw/.keep
