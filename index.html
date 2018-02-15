@@ -1,0 +1,59 @@
+<!doctype html>
+<html class="no-js" lang="">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Climate data on a globe</title>
+  <link rel="stylesheet" href="css/vendor/normalize.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <div id="app" class="app">
+    <div id="calendar" class="calendar">
+      <div class="mo">Jan</div>
+      <div class="mo">Feb</div>
+      <div class="mo">Mar</div>
+      <div class="mo">Apr</div>
+      <div class="mo">May</div>
+      <div class="mo">Jun</div>
+      <div class="mo">Jul</div>
+      <div class="mo">Aug</div>
+      <div class="mo">Sep</div>
+      <div class="mo">Oct</div>
+      <div class="mo">Nov</div>
+      <div class="mo">Dec</div>
+      <div id="marker" class="marker"></div>
+    </div>
+    <div id="globes" class="globes">
+      <div id="ocean-currents" class="globe">
+        <div class="loading"><h1>Loading...</h1></div>
+      </div>
+      <div id="atmosphere-wind" class="globe">
+        <div class="loading"><h1>Loading...</h1></div>
+      </div>
+    </div>
+    <div class="color-key">
+      <canvas id="color-key-canvas" class="color-key-canvas"></canvas>
+      <div class="label"><span>←</span> Cooler</div>
+      <div class="label">Warmer <span>→</span></div>
+    </div>
+  </div>
+
+  <video id="video" webkit-playsinline style="display: none" autoplay loop>
+    <source src="output/globeTest.mp4" type='video/mp4'>
+  </video>
+
+  <script src="js/vendor/jquery-3.3.1.min.js"></script>
+  <script src="js/vendor/underscore-min.js"></script>
+  <script src="js/vendor/three.min.js"></script>
+  <script src="js/vendor/three/OrbitControls.js"></script>
+  <script src="js/vendor/three/threeGeoJSON.js"></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/globe.js"></script>
+  <script src="js/colorKey.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
