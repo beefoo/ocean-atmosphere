@@ -49,7 +49,12 @@ GRADIENT = []
 with open(GRADIENT_FILE) as f:
     GRADIENT = json.load(f)
 
+dateStart = datetime.date(DATE_START[0], DATE_START[1], DATE_START[2])
+dateEnd = datetime.date(DATE_END[0], DATE_END[1], DATE_END[2])
+
 params = {}
+params["date_start"] = dateStart
+params["date_end"] = dateEnd
 params["lon_range"] = [float(d) for d in args.LON_RANGE.strip().split(",")]
 params["lat_range"] = [float(d) for d in args.LAT_RANGE.strip().split(",")]
 params["points_per_particle"] = args.POINTS_PER_PARTICLE
@@ -61,10 +66,7 @@ params["height"] = args.HEIGHT
 params["gradient"] = GRADIENT
 
 # Read data
-dateStart = datetime.date(DATE_START[0], DATE_START[1], DATE_START[2])
-dateEnd = datetime.date(DATE_END[0], DATE_END[1], DATE_END[2])
 date = dateStart
-
 filenames = []
 dates = []
 while date <= dateEnd:
@@ -76,12 +78,12 @@ while date <= dateEnd:
 
 print "Reading %s files asyncronously..." % len(filenames)
 pool = ThreadPool()
-data = pool.map(readCSVData, filenames)
+data = pool.map(readAtmosphereCSVData, filenames[:4])
 pool.close()
 pool.join()
 print "Done reading files"
 
-lons = len(data[0][0][0])
+lons = len(data[0])
 lats = len(data[0][0])
 total = lons * lats
 print "Lons (%s) x Lats (%s) = %s" % (lons, lats, total)
@@ -94,16 +96,41 @@ def frameToImage(p):
     print "Processing %s" % p["fileOut"]
 
     # Determine the two vector fields to interpolate from
-
-    # Interpolate between two fields
+    delta = p["date_end"] - p["date_start"]
+    dayProgress = p["progress"] * (delta.days + 1.0)
+    dateTarget = p["date_start"] + datetime.timedelta(days=int(dayProgress))
+    i0 = len(p["dates"])-1
+    i1 = 0
+    for i, date in enumerate(p["dates"]):
+        if date == dateTarget:
+            i0 = i
+            i1 = i + 1
+            break
+        elif date > dateTarget:
+            i0 = i - 1
+            i1 = i
+            break
+    if i0 < 0:
+        i0 = len(p["dates"])-1
+    if i1 >= len(p["dates"]):
+        i1 = 0
+    d0 = (p["dates"][i0]-p["date_start"]).days
+    d1 = (p["dates"][i1]-p["date_start"]).days
+    if d1 > d0 and d0 <= dayProgress <= d1:
+        mu = norm(dayProgress, d0, d1)
+    else:
+        mu = dayProgress % 1.0
+    f0 = p["data"][i0]
+    f1 = p["data"][i1]
 
     # Set up temperature background image
-    # Interpolate between two temperature images
+    baseImage = getTemperatureImage(f0, f1, mu, p["temperature_range"], p["gradient"])
 
     # Setup particles
 
     # Draw particles
 
+    baseImage.save(p["fileOut"])
     print "Finished %s" % p["fileOut"]
 
 
@@ -114,10 +141,11 @@ particleStartingPositions = [(random.uniform(params["lon_range"][0], params["lon
 particleOffsets = [random.random() for i in range(params["particles"])]
 
 frameParams = []
-pad = len(str(len(frames)))
+pad = len(str(frames))
 for frame in range(frames):
     p = params.copy()
     p.update({
+        "progress": 1.0 * frame / (frames-1),
         "frame": frame,
         "frames": frames,
         "fileOut": OUTPUT_FILE % str(frame+1).zfill(pad),
@@ -127,6 +155,7 @@ for frame in range(frames):
         "particleOffsets": particleOffsets
     })
     frameParams.append(p)
+    break
 
 print "Making %s image files asyncronously..." % frames
 pool = ThreadPool()

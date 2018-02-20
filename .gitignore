@@ -3,3 +3,4 @@ output/*
 !output/.keep
 data/raw/*
 !data/raw/.keep
+*.pyc
