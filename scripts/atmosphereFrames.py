@@ -26,11 +26,14 @@ parser.add_argument('-end', dest="DATE_END", default="2016-12-31", help="Date en
 parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
 parser.add_argument('-lat', dest="LAT_RANGE", default="90,-90", help="Latitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=72, help="Points per particle")
-parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.06, help="Velocity mulitplier")
-parser.add_argument('-particles', dest="PARTICLES", type=int, default=6000, help="Number of particles to display")
+parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.08, help="Number of pixels per degree of lon/lat")
+parser.add_argument('-particles', dest="PARTICLES", type=int, default=10000, help="Number of particles to display")
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-20.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="0.2,2.4", help="Line width range")
+parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range")
 parser.add_argument('-dur', dest="DURATION", type=int, default=120, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=30, help="Frames per second")
 
@@ -61,6 +64,9 @@ params["points_per_particle"] = args.POINTS_PER_PARTICLE
 params["velocity_multiplier"] = args.VELOCITY_MULTIPLIER
 params["particles"] = args.PARTICLES
 params["temperature_range"] = [float(d) for d in args.TEMPERATURE_RANGE.split(",")]
+params["linewidth_range"] = [float(d) for d in args.LINE_WIDTH_RANGE.split(",")]
+params["mag_range"] = [float(d) for d in args.MAGNITUDE_RANGE.split(",")]
+params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.split(",")]
 params["width"] = args.WIDTH
 params["height"] = args.HEIGHT
 params["gradient"] = GRADIENT
@@ -78,7 +84,7 @@ while date <= dateEnd:
 
 print "Reading %s files asyncronously..." % len(filenames)
 pool = ThreadPool()
-data = pool.map(readAtmosphereCSVData, filenames[:4])
+data = pool.map(readAtmosphereCSVData, filenames[:2])
 pool.close()
 pool.join()
 print "Done reading files"
@@ -93,8 +99,6 @@ frames = DURATION * FPS
 print "%s frames with duration %s" % (frames, DURATION)
 
 def frameToImage(p):
-    print "Processing %s" % p["fileOut"]
-
     # Determine the two vector fields to interpolate from
     delta = p["date_end"] - p["date_start"]
     dayProgress = p["progress"] * (delta.days + 1.0)
@@ -123,15 +127,30 @@ def frameToImage(p):
     f0 = p["data"][i0]
     f1 = p["data"][i1]
 
+    lerpedData = lerpData(f0, f1, mu)
+
     # Set up temperature background image
-    baseImage = getTemperatureImage(f0, f1, mu, p["temperature_range"], p["gradient"])
+    print "%s: calculating temperature colors" % p["fileOut"]
+    baseImage = getTemperatureImage(lerpedData, p)
+    baseImage = baseImage.resize((p["width"], p["height"]), resample=Image.BICUBIC)
+    # baseImage = baseImage.convert(mode="RGBA")
 
     # Setup particles
+    print "%s: calculating particles..." % p["fileOut"]
+    particles = getParticleData(lerpedData, p)
 
     # Draw particles
+    print "%s: drawing particles..." % p["fileOut"]
+    draw = ImageDraw.Draw(baseImage, 'RGBA')
+    for particle in particles:
+        for i, point in enumerate(particle):
+            if i > 0:
+                prev = particle[i-1]
+                draw.line([prev[0], prev[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+    del draw
 
     baseImage.save(p["fileOut"])
-    print "Finished %s" % p["fileOut"]
+    print "%s: finished." % p["fileOut"]
 
 
 # Initialize particle starting positions
