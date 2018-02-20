@@ -36,6 +36,7 @@ parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Ma
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range")
 parser.add_argument('-dur', dest="DURATION", type=int, default=120, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=30, help="Frames per second")
+parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=3000, help="How many milliseconds each particle should animate over")
 
 args = parser.parse_args()
 
@@ -70,6 +71,7 @@ params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.split(",")]
 params["width"] = args.WIDTH
 params["height"] = args.HEIGHT
 params["gradient"] = GRADIENT
+params["animation_dur"] = args.ANIMATION_DUR
 
 # Read data
 date = dateStart
@@ -142,11 +144,39 @@ def frameToImage(p):
     # Draw particles
     print "%s: drawing particles..." % p["fileOut"]
     draw = ImageDraw.Draw(baseImage, 'RGBA')
+    w = p["width"]
+    h = p["height"]
+    hw = w/2
     for particle in particles:
         for i, point in enumerate(particle):
             if i > 0:
                 prev = particle[i-1]
-                draw.line([prev[0], prev[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                # going from right side back to the left side
+                if prev[0]-point[0] > hw:
+                    intersection = lineIntersection(
+                        ((prev[0], prev[1]), (point[0]+w-1, point[1])),
+                        ((w-1, 0), (w-1, h))
+                    )
+                    if intersection:
+                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                        draw.line([0, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                    # else:
+
+
+                # going from left side around to the right side
+                elif point[0]-prev[0] > hw:
+                    intersection = lineIntersection(
+                        ((prev[0], prev[1]), (point[0]-w-1, point[1])),
+                        ((0, 0), (0, h))
+                    )
+                    if intersection:
+                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                        draw.line([w-1, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                    # else:
+
+                # draw line normally
+                else:
+                    draw.line([prev[0], prev[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
     del draw
 
     baseImage.save(p["fileOut"])
@@ -154,24 +184,27 @@ def frameToImage(p):
 
 
 # Initialize particle starting positions
-particleStartingPositions = [(random.uniform(params["lon_range"][0], params["lon_range"][1]), random.uniform(params["lat_range"][1], params["lat_range"][0])) for i in range(params["particles"])]
-
-# Initialize particles offsets
-particleOffsets = [random.random() for i in range(params["particles"])]
+particleProperties = [
+    (random.random(), # a random x
+     random.random(), # a random y
+     random.random()) # a random offset
+    for i in range(params["particles"])
+]
 
 frameParams = []
 pad = len(str(frames))
 for frame in range(frames):
     p = params.copy()
+    ms = 1.0 * frame / FPS * 1000
     p.update({
         "progress": 1.0 * frame / (frames-1),
+        "animationProgress": (1.0 * ms / params["animation_dur"]) % 1.0,
         "frame": frame,
         "frames": frames,
         "fileOut": OUTPUT_FILE % str(frame+1).zfill(pad),
         "dates": dates,
         "data": data,
-        "particleStartingPositions": particleStartingPositions,
-        "particleOffsets": particleOffsets
+        "particleProperties": particleProperties
     })
     frameParams.append(p)
     break

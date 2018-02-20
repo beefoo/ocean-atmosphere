@@ -35,6 +35,22 @@ def getColor(gradient, mu, start=0.0, end=1.0):
 def lerp(a, b, mu):
     return (b-a) * mu + a
 
+def lineIntersection(line1, line2):
+    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
+    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
+
+    def det(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    div = det(xdiff, ydiff)
+    if div == 0:
+       return False
+
+    d = (det(*line1), det(*line2))
+    x = det(d, xdiff) / div
+    y = det(d, ydiff) / div
+    return x, y
+
 def mean(data):
     n = len(data)
     if n < 1:
@@ -154,6 +170,9 @@ def getParticleData(data, p):
     w = p["points_per_particle"]
     dim = 4 # four points: x, y, alpha, width
     particles = np.empty(h * w * dim, dtype=int)
+    offset = p["animationProgress"]
+
+    pp = p["particleProperties"]
 
     tw = p["width"]
     th = p["height"]
@@ -162,9 +181,7 @@ def getParticleData(data, p):
     dw = len(data[0])
 
     for i in range(h):
-        # randomly choose starting position
-        dx = random.random()
-        dy = random.random()
+        dx, dy, doffset = pp[i]
 
         # set starting position
         x = dx * (tw-1)
@@ -178,8 +195,10 @@ def getParticleData(data, p):
 
             mag = math.sqrt(u * u + v * v)
             mag = norm(mag, p["mag_range"][0], p["mag_range"][1])
-            alpha = lerp(p["alpha_range"][0], p["alpha_range"][1], mag)
-            linewidth = lerp(p["linewidth_range"][0], p["linewidth_range"][1], mag)
+
+            progressMultiplier = (1.0 * j / (w-1) + offset) % 1.0
+            alpha = lerp(p["alpha_range"][0], p["alpha_range"][1], mag * progressMultiplier)
+            linewidth = lerp(p["linewidth_range"][0], p["linewidth_range"][1], mag * progressMultiplier)
 
             index = i * w * dim + j * dim
             particles[index] = int(round(x))
@@ -191,8 +210,8 @@ def getParticleData(data, p):
             y += (-v) * p["velocity_multiplier"]
 
             y = clamp(y, 0, th-1)
-            x = clamp(x, 0, tw-1)
-            # x = wrap(x, 0, tw-1)
+            # x = clamp(x, 0, tw-1)
+            x = wrap(x, 0, tw-1)
             dx = x / tw
             dy = y / th
 
