@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# python atmosphereFrames.py -debug 1
+# ffmpeg -framerate 30/1 -i ../output/atmosphere/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_sample.mp4
+
 import argparse
 import datetime
 import json
@@ -27,16 +30,18 @@ parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude r
 parser.add_argument('-lat', dest="LAT_RANGE", default="90,-90", help="Latitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=72, help="Points per particle")
 parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.08, help="Number of pixels per degree of lon/lat")
-parser.add_argument('-particles', dest="PARTICLES", type=int, default=10000, help="Number of particles to display")
+parser.add_argument('-particles', dest="PARTICLES", type=int, default=12000, help="Number of particles to display")
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-20.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
-parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="0.2,2.4", help="Line width range")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
-parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range (0-255)")
+parser.add_argument('-avg', dest="ROLLING_AVERAGE", type=int, default=30, help="Do a rolling average of x data points")
 parser.add_argument('-dur', dest="DURATION", type=int, default=120, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=30, help="Frames per second")
 parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=3000, help="How many milliseconds each particle should animate over")
+parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 
 args = parser.parse_args()
 
@@ -47,6 +52,7 @@ DATE_START = [int(d) for d in args.DATE_START.split("-")]
 DATE_END = [int(d) for d in args.DATE_END.split("-")]
 DURATION = args.DURATION
 FPS = args.FPS
+DEBUG = args.DEBUG
 
 # Get gradient
 GRADIENT = []
@@ -72,6 +78,7 @@ params["width"] = args.WIDTH
 params["height"] = args.HEIGHT
 params["gradient"] = GRADIENT
 params["animation_dur"] = args.ANIMATION_DUR
+params["rolling_avg"] = args.ROLLING_AVERAGE
 
 # Read data
 date = dateStart
@@ -84,9 +91,16 @@ while date <= dateEnd:
         dates.append(date)
     date += datetime.timedelta(days=1)
 
+# if debugging, just process 3 seconds
+debugFrames = FPS * 3
+if DEBUG:
+    filenames = filenames[:62]
+    if DEBUG == 1:
+        filenames = filenames[:2]
+
 print "Reading %s files asyncronously..." % len(filenames)
 pool = ThreadPool()
-data = pool.map(readAtmosphereCSVData, filenames[:2])
+data = pool.map(readAtmosphereCSVData, filenames)
 pool.close()
 pool.join()
 print "Done reading files"
@@ -102,43 +116,26 @@ print "%s frames with duration %s" % (frames, DURATION)
 
 def frameToImage(p):
     # Determine the two vector fields to interpolate from
-    delta = p["date_end"] - p["date_start"]
-    dayProgress = p["progress"] * (delta.days + 1.0)
-    dateTarget = p["date_start"] + datetime.timedelta(days=int(dayProgress))
-    i0 = len(p["dates"])-1
-    i1 = 0
-    for i, date in enumerate(p["dates"]):
-        if date == dateTarget:
-            i0 = i
-            i1 = i + 1
-            break
-        elif date > dateTarget:
-            i0 = i - 1
-            i1 = i
-            break
-    if i0 < 0:
-        i0 = len(p["dates"])-1
-    if i1 >= len(p["dates"]):
-        i1 = 0
-    d0 = (p["dates"][i0]-p["date_start"]).days
-    d1 = (p["dates"][i1]-p["date_start"]).days
-    if d1 > d0 and d0 <= dayProgress <= d1:
-        mu = norm(dayProgress, d0, d1)
-    else:
-        mu = dayProgress % 1.0
-    f0 = p["data"][i0]
-    f1 = p["data"][i1]
-
+    print "%s: processing data..." % p["fileOut"]
+    dataCount = len(p["dates"])
+    dataProgress = p["progress"] * (dataCount - 1)
+    dataIndexA0 = int(math.floor(dataProgress))
+    dataIndexA1 = dataIndexA0 + p["rolling_avg"]
+    dataIndexB0 = int(math.ceil(dataProgress))
+    dataIndexB1 = dataIndexB0 + p["rolling_avg"]
+    mu = dataProgress - dataIndexA0
+    f0 = getWrappedData(p["data"], dataCount, dataIndexA0, dataIndexA1)
+    f1 = getWrappedData(p["data"], dataCount, dataIndexB0, dataIndexB1)
     lerpedData = lerpData(f0, f1, mu)
 
     # Set up temperature background image
-    print "%s: calculating temperature colors" % p["fileOut"]
+    # print "%s: calculating temperature colors" % p["fileOut"]
     baseImage = getTemperatureImage(lerpedData, p)
     baseImage = baseImage.resize((p["width"], p["height"]), resample=Image.BICUBIC)
     # baseImage = baseImage.convert(mode="RGBA")
 
     # Setup particles
-    print "%s: calculating particles..." % p["fileOut"]
+    # print "%s: calculating particles..." % p["fileOut"]
     particles = getParticleData(lerpedData, p)
 
     # Draw particles
@@ -153,6 +150,11 @@ def frameToImage(p):
             if i > 0:
                 prev = particle[i-1]
                 pwidth = max(1, int(round(point[3]/1000.0)));
+
+                # skip if transparent
+                if point[2] < 1:
+                    continue
+
                 # going from right side back to the left side
                 if prev[0]-point[0] > hw:
                     intersection = lineIntersection(
@@ -198,18 +200,21 @@ pad = len(str(frames))
 for frame in range(frames):
     p = params.copy()
     ms = 1.0 * frame / FPS * 1000
-    p.update({
-        "progress": 1.0 * frame / (frames-1),
-        "animationProgress": (1.0 * ms / params["animation_dur"]) % 1.0,
-        "frame": frame,
-        "frames": frames,
-        "fileOut": OUTPUT_FILE % str(frame+1).zfill(pad),
-        "dates": dates,
-        "data": data,
-        "particleProperties": particleProperties
-    })
-    frameParams.append(p)
-    break
+    filename = OUTPUT_FILE % str(frame+1).zfill(pad)
+    if not os.path.isfile(filename):
+        p.update({
+            "progress": 1.0 * frame / (frames-1),
+            "animationProgress": (1.0 * ms / params["animation_dur"]) % 1.0,
+            "frame": frame,
+            "frames": frames,
+            "fileOut": filename,
+            "dates": dates,
+            "data": data,
+            "particleProperties": particleProperties
+        })
+        frameParams.append(p)
+    if DEBUG and frame >= debugFrames or DEBUG == 1:
+        break
 
 print "Making %s image files asyncronously..." % frames
 pool = ThreadPool()

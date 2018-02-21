@@ -32,6 +32,14 @@ def getColor(gradient, mu, start=0.0, end=1.0):
     rgb = tuple([int(round(v*255.0)) for v in gradient[index]])
     return rgb
 
+def getWrappedData(data, count, start, end):
+    wData = []
+    if end <= count:
+        wData = data[start:end]
+    else: # wrap around to the beginning
+        wData = data[start:count] + data[0:(end-count)]
+    return wData
+
 def lerp(a, b, mu):
     return (b-a) * mu + a
 
@@ -72,11 +80,11 @@ def parseNumber(string):
     try:
         num = float(string)
     except ValueError:
-        num = False
+        num = 0.0
         print "Value error: %s" % string
     if num <= -9999 or num >= 9999:
         print "Value unknown: %s" % string
-        num = False
+        num = 0.0
     return num
 
 def wrap(value, a, b):
@@ -88,16 +96,163 @@ def wrap(value, a, b):
 
 # ATMOSPHERE
 
+def combineData(tData, uData, vData, uvLonRange, uvLatRange):
+    depth = 0
+    tLen = len(tData)
+    uvLen = len(uData)
+    th = len(tData[0])
+    tw = len(tData[0][0])
+    uvh = len(uData[0][depth])
+    uvw = len(uData[0][depth][0])
+    uvlon0, uvlon1 = uvLonRange
+    uvlat0, uvlat1 = uvLatRange
+
+    tData = np.array(tData, dtype=np.float32)
+    uData = np.array(uData, dtype=np.float32)
+    vData = np.array(vData, dtype=np.float32)
+
+    # convert to 1-dimension
+    tData = tData.reshape(-1)
+    uData = uData.reshape(-1)
+    vData = vData.reshape(-1)
+
+    w = int(uvw * (360.0/(uvlon1-uvlon0)))
+    h = w / 2
+    dim = 3
+    shape = (uvLen, h, w, dim)
+    result = np.empty(uvLen * h * w * dim, dtype=np.float32)
+
+    # the kernel function
+    src = """
+    static float lerpT(float a, float b, float mu) {
+        return (b - a) * mu + a;
+    }
+
+    static float normLat(float value, float a, float b) {
+        return = (value - a) / (b - a);
+    }
+
+    static float normLon(float value, float a, float b) {
+        float mvalue = value;
+        if (value < a) {
+            mvalue = value + 360.0;
+        }
+        if (value > b) {
+            mvalue = value - 360.0;
+        }
+        return (value - a) / (b - a);
+    }
+
+    __kernel void combineData(__global float *tdata, __global float *udata, __global float *vdata, __global float *result){
+        int tLen = %d;
+        int uvLen = %d;
+        int uvw = %d;
+        int uvh = %d;
+        int tw = %d;
+        int th = %d;
+        int w = %d;
+        int h = %d;
+        int dim = %d;
+        float uvlon0 = %f;
+        float uvlon1 = %f;
+        float uvlat0 = %f;
+        float uvlat1 = %f;
+
+        // get current position
+        int posx = get_global_id(2);
+        int posy = get_global_id(1);
+        int post = get_global_id(0);
+
+        // get position in float
+        float xf = (float) posx / (float) (w-1);
+        float yf = (float) posy / (float) (h-1);
+        float tf = (float) post / (float) (uvLen-1);
+
+        // get interpolated temperature
+        int tposx = (int) round(xf * (tw-1));
+        int tposy = (int) round(yf * (th-1));
+        float tpostf = tf * (float) tLen;
+        int tposta = (int) floor(tpostf);
+        int tpostb = (int) ceil(tpostf);
+        if (tpostb >= tLen) { // wrap around to the beginning
+            tpostb = 0;
+        }
+        float tmu = tpostf - floor(tpostf);
+        int i0 = tposta * tw * th + tposy * tw + tposx;
+        int i1 = tpostb * tw * th + tposy * tw + tposx;
+        float tValue = lerpT(tdata[i0], tdata[i1], tmu);
+
+        // convert position from lon 20,420 to -180,180 and lat 80,-80 to 90,-90
+        float lat = lerpb(90.0, -90.0, yf);
+        float lon = lerpb(-180.0, 180.0, xf);
+        float latn = normLat(lat, uvlat0, uvLat1);
+        float lonn = normLon(lon, uvlon0, uvlon1);
+        float uValue = 0.0;
+        float vValue = 0.0;
+
+        // check for invalid latitudes
+        if (latn >= 0.0 && latn <= 1.0) {
+            int posUVx = (int) round(lonn * (float) (uvw-1));
+            int posUVy = (int) round(latn * (float) (uvh-1));
+            int uvi = post * uvw * uvh + posUVy * uvw + posUVx;
+            uValue = udata[uvi];
+            vValue = vdata[uvi];
+        }
+
+        int i = post * w * h * dim + posy * w * dim + posx * dim;
+        result[i] = tValue;
+        result[i+1] = uValue;
+        result[i+2] = vValue;
+    }
+    """ % (tLen, uvLen, uvw, uvh, tw, th, w, h, dim, uvlon0, uvlon1, uvlat0, uvlat1)
+
+    # Get platforms, both CPU and GPU
+    plat = cl.get_platforms()
+    GPUs = plat[0].get_devices(device_type=cl.device_type.GPU)
+    CPU = plat[0].get_devices()
+
+    # prefer GPUs
+    if GPUs and len(GPUs) > 0:
+        ctx = cl.Context(devices=GPUs)
+    else:
+        print "Warning: using CPU"
+        ctx = cl.Context(CPU)
+
+    # Create queue for each kernel execution
+    queue = cl.CommandQueue(ctx)
+    mf = cl.mem_flags
+
+    # Kernel function instantiation
+    prg = cl.Program(ctx, src).build()
+
+    inT =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=tData)
+    inU =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=uData)
+    inV =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=vData)
+    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, result.nbytes)
+
+    prg.combineData(queue, [uvLen, h, w], None , inT, inU, inV, outResult)
+
+    # Copy result
+    cl.enqueue_copy(queue, result, outResult)
+
+    result = result.reshape(shape)
+    return result;
+
 # Interpolate between two datasets using GPU
 def lerpData(dataA, dataB, mu):
+    dataLen = len(dataA)
+    if dataLen != len(dataB):
+        print "Warning: data length mismatch"
+
+    shape = (len(dataA[0]), len(dataA[0][0]), 3)
+    h, w, dim = shape
+    result = np.empty(h * w * dim, dtype=np.float32)
+
     # read data as floats
     dataA = np.array(dataA)
     dataA = dataA.astype(np.float32)
     dataB = np.array(dataB)
     dataB = dataB.astype(np.float32)
-
-    shape = dataA.shape
-    h, w, dim = shape
 
     # convert to 1-dimension
     dataA = dataA.reshape(-1)
@@ -106,6 +261,8 @@ def lerpData(dataA, dataB, mu):
     # the kernel function
     src = """
     __kernel void lerpData(__global float *a, __global float *b, __global float *result){
+        int dlen = %d;
+        int h = %d;
         int w = %d;
         int dim = %d;
         float mu = %f;
@@ -123,16 +280,39 @@ def lerpData(dataA, dataB, mu):
             posxOffset = posxOffset - halfWidth;
         }
 
-        // get index
-        int i = posy * w * dim + posxOffset * dim;
+        // get indices
         int j = posy * w * dim + posx * dim;
 
+        // get the mean values for a and b datasets
+        float a1 = 0;
+        float a2 = 0;
+        float a3 = 0;
+        float b1 = 0;
+        float b2 = 0;
+        float b3 = 0;
+        for(int k=0; k<dlen; k++) {
+            int i = k * h * w * dim + posy * w * dim + posxOffset * dim;
+            a1 = a1 + a[i];
+            a2 = a2 + a[i+1];
+            a3 = a3 + a[i+2];
+            b1 = b1 + b[i];
+            b2 = b2 + b[i+1];
+            b3 = b3 + b[i+2];
+        }
+        float denom = (float) dlen;
+        a1 = a1 / denom;
+        a2 = a2 / denom;
+        a3 = a3 / denom;
+        b1 = b1 / denom;
+        b2 = b2 / denom;
+        b3 = b3 / denom;
+
         // set result
-        result[j] = a[i] + mu * (b[i]-a[i]);
-        result[j+1] = a[i+1] + mu * (b[i+1]-a[i+1]);
-        result[j+2] = a[i+2] + mu * (b[i+2]-a[i+2]);
+        result[j] = a1 + mu * (b1-a1);
+        result[j+1] = a2 + mu * (b2-a2);
+        result[j+2] = a3 + mu * (b3-a3);
     }
-    """ % (w, dim, mu)
+    """ % (dataLen, h, w, dim, mu)
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()
@@ -143,6 +323,7 @@ def lerpData(dataA, dataB, mu):
     if GPUs and len(GPUs) > 0:
         ctx = cl.Context(devices=GPUs)
     else:
+        print "Warning: using CPU"
         ctx = cl.Context(CPU)
 
     # Create queue for each kernel execution
@@ -154,12 +335,11 @@ def lerpData(dataA, dataB, mu):
 
     inA =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataA)
     inB =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataB)
-    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, dataA.nbytes)
+    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, result.nbytes)
 
-    prg.lerpData(queue, shape, None , inA, inB, outResult)
+    prg.lerpData(queue, [h, w], None , inA, inB, outResult)
 
     # Copy result
-    result = np.empty_like(dataA)
     cl.enqueue_copy(queue, result, outResult)
 
     result = result.reshape(shape)
@@ -170,13 +350,27 @@ def getParticleData(data, p):
     w = p["points_per_particle"]
     dim = 4 # four points: x, y, alpha, width
 
-    result = np.empty(h * w * dim, dtype=np.uint8)
-    pp = p["particleProperties"]
     offset = p["animationProgress"]
     tw = p["width"]
     th = p["height"]
     dh = len(data)
     dw = len(data[0])
+
+    result = np.zeros(h * w * dim, dtype=np.float32)
+
+    # print "%s x %s x %s = %s" % (w, h, dim, len(result))
+
+    fData = np.array(data)
+    fData = fData.astype(np.float32)
+    fData = fData.reshape(-1)
+
+    # print "%s x %s x 3 = %s" % (dw, dh, len(fData))
+
+    pData = np.array(p["particleProperties"])
+    pData = pData.astype(np.float32)
+    pData = pData.reshape(-1)
+
+    # print "%s x 3 = %s" % (h, len(pData))
 
     # the kernel function
     src = """
@@ -204,7 +398,7 @@ def getParticleData(data, p):
         return value;
     }
 
-    __kernel void getParticles(__global float *data, __global float *pData, __global uchar *result){
+    __kernel void getParticles(__global float *data, __global float *pData, __global float *result){
         int points = %d;
         int dw = %d;
         int dh = %d;
@@ -244,14 +438,15 @@ def getParticleData(data, p):
             // determine alpha transparency and line width based on magnitude and offset
             float jp = (float) j / (float) (points-1);
             float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
+            progressMultiplier = 1.0 - progressMultiplier;
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
             float linewidth = lerp(lineMin, lineMax, mag * progressMultiplier);
 
             int pindex = i * points * 4 + j * 4;
-            result[pindex] = (int) round(x);
-            result[pindex+1] = (int) round(y);
-            result[pindex+2] = (int) round(alpha);
-            result[pindex+3] = (int) round(linewidth*1000);
+            result[pindex] = round(x);
+            result[pindex+1] = round(y);
+            result[pindex+2] = round(alpha);
+            result[pindex+3] = round(linewidth*1000);
 
             x = x + u * velocityMult;
             y = y + (-v) * velocityMult;
@@ -276,10 +471,10 @@ def getParticleData(data, p):
 
     # prefer GPUs
     if GPUs and len(GPUs) > 0:
-        print "Using GPU"
+        # print "Using GPU"
         ctx = cl.Context(devices=GPUs)
     else:
-        print "Using CPU"
+        print "Warning: using CPU"
         ctx = cl.Context(CPU)
 
     # Create queue for each kernel execution
@@ -289,15 +484,7 @@ def getParticleData(data, p):
     # Kernel function instantiation
     prg = cl.Program(ctx, src).build()
 
-    data = np.array(data)
-    data = data.astype(np.float32)
-    data = data.reshape(-1)
-
-    pData = np.array(pp)
-    pData = pData.astype(np.float32)
-    pData = pData.reshape(-1)
-
-    inData =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
+    inData =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fData)
     inPData =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=pData)
     outResult = cl.Buffer(ctx, mf.WRITE_ONLY, result.nbytes)
 
@@ -371,10 +558,10 @@ def getTemperatureImage(data, p):
 
     # prefer GPUs
     if GPUs and len(GPUs) > 0:
-        print "Using GPU"
+        # print "Using GPU"
         ctx = cl.Context(devices=GPUs)
     else:
-        print "Using CPU"
+        print "Warning: using CPU"
         ctx = cl.Context(CPU)
 
     # Create queue for each kernel execution
@@ -388,7 +575,7 @@ def getTemperatureImage(data, p):
     inG =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataG)
     outResult = cl.Buffer(ctx, mf.WRITE_ONLY, (data.astype(np.uint8)).nbytes)
 
-    prg.lerpImage(queue, shape, None, inData, inG, outResult)
+    prg.lerpImage(queue, [h, w], None, inData, inG, outResult)
 
     # Copy result
     result = np.empty_like(data)
@@ -418,13 +605,14 @@ def readAtmosphereCSVData(filename):
     print "Done reading %s" % filename
     return data
 
-class Particle:
-
-    def __init__(self):
-        self.startPosition = ()
-        self.boundX = ()
-        self.boundY = ()
-        self.positions = []
-
-    def loadFromField(self, field):
-        print "TODO"
+def readOceanCSVData(filename):
+    print "Reading %s" % filename
+    data = []
+    with gzip.open(filename, 'rb') as f:
+        lines = list(f)
+        rows = [0 for i in range(len(lines))]
+        for i, line in enumerate(lines):
+            row = [float(value) for value in line.split(",")]
+            rows[i] = row
+        data = rows
+    return data
