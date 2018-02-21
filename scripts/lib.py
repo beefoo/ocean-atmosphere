@@ -169,53 +169,147 @@ def getParticleData(data, p):
     h = p["particles"]
     w = p["points_per_particle"]
     dim = 4 # four points: x, y, alpha, width
-    particles = np.empty(h * w * dim, dtype=int)
-    offset = p["animationProgress"]
 
+    result = np.empty(h * w * dim, dtype=np.uint8)
     pp = p["particleProperties"]
-
+    offset = p["animationProgress"]
     tw = p["width"]
     th = p["height"]
-
     dh = len(data)
     dw = len(data[0])
 
-    for i in range(h):
-        dx, dy, doffset = pp[i]
+    # the kernel function
+    src = """
+    static float lerp(float a, float b, float mu) {
+        return (b - a) * mu + a;
+    }
 
-        # set starting position
-        x = dx * (tw-1)
-        y = dy * (th-1)
+    static float norm(float value, float a, float b) {
+        float n = (value - a) / (b - a);
+        if (n > 1.0) {
+            n = 1.0;
+        }
+        if (n < 0.0) {
+            n = 0.0;
+        }
+        return n;
+    }
 
-        for j in range(w):
-            # get the closest UV
-            lon = int(round(dx * (dw-1)))
-            lat = int(round(dy * (dh-1)))
-            t, u, v = tuple(data[lat][lon])
+    static float wrap(float value, float a, float b) {
+        if (value < a) {
+            value = b - (a - value);
+        } else if (value > b) {
+            value = a + (value - b);
+        }
+        return value;
+    }
 
-            mag = math.sqrt(u * u + v * v)
-            mag = norm(mag, p["mag_range"][0], p["mag_range"][1])
+    __kernel void getParticles(__global float *data, __global float *pData, __global uchar *result){
+        int points = %d;
+        int dw = %d;
+        int dh = %d;
+        float tw = %f;
+        float th = %f;
+        float offset = %f;
+        float magMin = %f;
+        float magMax = %f;
+        float alphaMin = %f;
+        float alphaMax = %f;
+        float lineMin = %f;
+        float lineMax = %f;
+        float velocityMult = %f;
 
-            progressMultiplier = (1.0 * j / (w-1) + offset) % 1.0
-            alpha = lerp(p["alpha_range"][0], p["alpha_range"][1], mag * progressMultiplier)
-            linewidth = lerp(p["linewidth_range"][0], p["linewidth_range"][1], mag * progressMultiplier)
+        // get current position
+        int i = get_global_id(0);
+        float dx = pData[i*3];
+        float dy = pData[i*3+1];
+        float doffset = pData[i*3+2];
 
-            index = i * w * dim + j * dim
-            particles[index] = int(round(x))
-            particles[index+1] = int(round(y))
-            particles[index+2] = int(round(alpha))
-            particles[index+3] = linewidth
+        // set starting position
+        float x = dx * (tw-1);
+        float y = dy * (th-1);
 
-            x += u * p["velocity_multiplier"]
-            y += (-v) * p["velocity_multiplier"]
+        for(int j=0; j<points; j++) {
+            // get UV value
+            int lon = (int) round(dx * (dw-1));
+            int lat = (int) round(dy * (dh-1));
+            int dindex = lat * dw * 3 + lon * 3;
+            float u = data[dindex+1];
+            float v = data[dindex+2];
 
-            y = clamp(y, 0, th-1)
-            # x = clamp(x, 0, tw-1)
-            x = wrap(x, 0, tw-1)
-            dx = x / tw
-            dy = y / th
+            // calc magnitude
+            float mag = sqrt(u * u + v * v);
+            mag = norm(mag, magMin, magMax);
 
-    return particles.reshape([h, w, dim]);
+            // determine alpha transparency and line width based on magnitude and offset
+            float jp = (float) j / (float) (points-1);
+            float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
+            float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
+            float linewidth = lerp(lineMin, lineMax, mag * progressMultiplier);
+
+            int pindex = i * points * 4 + j * 4;
+            result[pindex] = (int) round(x);
+            result[pindex+1] = (int) round(y);
+            result[pindex+2] = (int) round(alpha);
+            result[pindex+3] = (int) round(linewidth*1000);
+
+            x = x + u * velocityMult;
+            y = y + (-v) * velocityMult;
+
+            if (y < 0.0) {
+                y = 0.0;
+            }
+            if (y > (th-1.0)) {
+                y = th-1.0;
+            }
+            x = wrap(x, 0.0, tw-1);
+            dx = x / tw;
+            dy = y / th;
+        }
+    }
+    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["linewidth_range"][0], p["linewidth_range"][1], p["velocity_multiplier"])
+
+    # Get platforms, both CPU and GPU
+    plat = cl.get_platforms()
+    GPUs = plat[0].get_devices(device_type=cl.device_type.GPU)
+    CPU = plat[0].get_devices()
+
+    # prefer GPUs
+    if GPUs and len(GPUs) > 0:
+        print "Using GPU"
+        ctx = cl.Context(devices=GPUs)
+    else:
+        print "Using CPU"
+        ctx = cl.Context(CPU)
+
+    # Create queue for each kernel execution
+    queue = cl.CommandQueue(ctx)
+    mf = cl.mem_flags
+
+    # Kernel function instantiation
+    prg = cl.Program(ctx, src).build()
+
+    data = np.array(data)
+    data = data.astype(np.float32)
+    data = data.reshape(-1)
+
+    pData = np.array(pp)
+    pData = pData.astype(np.float32)
+    pData = pData.reshape(-1)
+
+    inData =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
+    inPData =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=pData)
+    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, result.nbytes)
+
+    prg.getParticles(queue, (h, ), None, inData, inPData, outResult)
+
+    # Copy result
+    cl.enqueue_copy(queue, result, outResult)
+
+    result = result.reshape((h, w, dim))
+    result = result.astype(int)
+
+    return result;
 
 # Create image based on temperature data using GPU
 def getTemperatureImage(data, p):

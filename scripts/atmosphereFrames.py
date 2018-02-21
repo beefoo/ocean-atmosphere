@@ -147,10 +147,12 @@ def frameToImage(p):
     w = p["width"]
     h = p["height"]
     hw = w/2
+
     for particle in particles:
         for i, point in enumerate(particle):
             if i > 0:
                 prev = particle[i-1]
+                pwidth = max(1, int(round(point[3]/1000.0)));
                 # going from right side back to the left side
                 if prev[0]-point[0] > hw:
                     intersection = lineIntersection(
@@ -158,8 +160,8 @@ def frameToImage(p):
                         ((w-1, 0), (w-1, h))
                     )
                     if intersection:
-                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=point[3])
-                        draw.line([0, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=pwidth)
+                        draw.line([0, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=pwidth)
                     # else:
 
 
@@ -170,13 +172,13 @@ def frameToImage(p):
                         ((0, 0), (0, h))
                     )
                     if intersection:
-                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=point[3])
-                        draw.line([w-1, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=pwidth)
+                        draw.line([w-1, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=pwidth)
                     # else:
 
                 # draw line normally
                 else:
-                    draw.line([prev[0], prev[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=point[3])
+                    draw.line([prev[0], prev[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=pwidth)
     del draw
 
     baseImage.save(p["fileOut"])
