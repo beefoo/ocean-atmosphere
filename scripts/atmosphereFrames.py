@@ -126,7 +126,7 @@ def frameToImage(p):
     mu = dataProgress - dataIndexA0
     f0 = getWrappedData(p["data"], dataCount, dataIndexA0, dataIndexA1)
     f1 = getWrappedData(p["data"], dataCount, dataIndexB0, dataIndexB1)
-    lerpedData = lerpData(f0, f1, mu)
+    lerpedData = lerpData(f0, f1, mu, len(f0[0][0])/2)
 
     # Set up temperature background image
     # print "%s: calculating temperature colors" % p["fileOut"]

@@ -4,6 +4,7 @@ import csv
 import gzip
 import math
 import numpy as np
+import numpy.ma as ma
 import os
 from PIL import Image
 from pprint import pprint
@@ -108,8 +109,15 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
     uvlat0, uvlat1 = uvLatRange
 
     tData = np.array(tData, dtype=np.float32)
-    uData = np.array(uData, dtype=np.float32)
-    vData = np.array(vData, dtype=np.float32)
+    uData = np.array(uData)
+    vData = np.array(vData)
+
+    # remove nan values
+    uData = np.nan_to_num(uData)
+    vData = np.nan_to_num(vData)
+
+    uData = uData.astype(np.float32)
+    vData = vData.astype(np.float32)
 
     # convert to 1-dimension
     tData = tData.reshape(-1)
@@ -129,7 +137,7 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
     }
 
     static float normLat(float value, float a, float b) {
-        return = (value - a) / (b - a);
+        return (value - a) / (b - a);
     }
 
     static float normLon(float value, float a, float b) {
@@ -140,7 +148,7 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
         if (value > b) {
             mvalue = value - 360.0;
         }
-        return (value - a) / (b - a);
+        return (mvalue - a) / (b - a);
     }
 
     __kernel void combineData(__global float *tdata, __global float *udata, __global float *vdata, __global float *result){
@@ -183,9 +191,9 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
         float tValue = lerpT(tdata[i0], tdata[i1], tmu);
 
         // convert position from lon 20,420 to -180,180 and lat 80,-80 to 90,-90
-        float lat = lerpb(90.0, -90.0, yf);
-        float lon = lerpb(-180.0, 180.0, xf);
-        float latn = normLat(lat, uvlat0, uvLat1);
+        float lat = lerpT(90.0, -90.0, yf);
+        float lon = lerpT(-180.0, 180.0, xf);
+        float latn = normLat(lat, uvlat0, uvlat1);
         float lonn = normLon(lon, uvlon0, uvlon1);
         float uValue = 0.0;
         float vValue = 0.0;
@@ -197,6 +205,12 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
             int uvi = post * uvw * uvh + posUVy * uvw + posUVx;
             uValue = udata[uvi];
             vValue = vdata[uvi];
+            if (uValue >= 9999.0 || uValue <= -9999.0) {
+                uValue = 0.0;
+            }
+            if (vValue >= 9999.0 || vValue <= -9999.0) {
+                vValue = 0.0;
+            }
         }
 
         int i = post * w * h * dim + posy * w * dim + posx * dim;
@@ -239,7 +253,7 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
     return result;
 
 # Interpolate between two datasets using GPU
-def lerpData(dataA, dataB, mu):
+def lerpData(dataA, dataB, mu, offset=0):
     dataLen = len(dataA)
     if dataLen != len(dataB):
         print "Warning: data length mismatch"
@@ -266,18 +280,20 @@ def lerpData(dataA, dataB, mu):
         int w = %d;
         int dim = %d;
         float mu = %f;
+        int offsetX = %d;
 
         // get current position
         int posx = get_global_id(1);
         int posy = get_global_id(0);
 
         // convert position from 0,360 to -180,180
-        int halfWidth = w / 2;
         int posxOffset = posx;
-        if (posx < halfWidth) {
-            posxOffset = posxOffset + halfWidth;
-        } else {
-            posxOffset = posxOffset - halfWidth;
+        if (offsetX > 0 || offsetX < 0) {
+            if (posx < offsetX) {
+                posxOffset = posxOffset + offsetX;
+            } else {
+                posxOffset = posxOffset - offsetX;
+            }
         }
 
         // get indices
@@ -312,7 +328,7 @@ def lerpData(dataA, dataB, mu):
         result[j+1] = a2 + mu * (b2-a2);
         result[j+2] = a3 + mu * (b3-a3);
     }
-    """ % (dataLen, h, w, dim, mu)
+    """ % (dataLen, h, w, dim, mu, offset)
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()
@@ -431,6 +447,14 @@ def getParticleData(data, p):
             float u = data[dindex+1];
             float v = data[dindex+2];
 
+            // check for invalid values
+            if (u >= 9999.0 || u <= -9999.0) {
+                u = 0.0;
+            }
+            if (v >= 9999.0 || v <= -9999.0) {
+                v = 0.0;
+            }
+
             // calc magnitude
             float mag = sqrt(u * u + v * v);
             mag = norm(mag, magMin, magMax);
@@ -528,26 +552,33 @@ def getTemperatureImage(data, p):
         // get index
         int i = posy * w * dim + posx * dim;
         float temperature = d[i];
+        int r = 36;
+        int g = 36;
+        int b = 36;
 
-        // normalize the temperature
-        float norm = (temperature - minValue) / (maxValue - minValue);
-        // clamp
-        if (norm > 1.0) {
-            norm = 1.0;
+        // assume large values are invalid
+        if (temperature > -9999.0 && temperature < 9999.0) {
+            // normalize the temperature
+            float norm = (temperature - minValue) / (maxValue - minValue);
+            // clamp
+            if (norm > 1.0) {
+                norm = 1.0;
+            }
+            if (norm < 0.0) {
+                norm = 0.0;
+            }
+            // get color from gradient
+            int gradientIndex = (int) round(norm * (gradLen-1));
+            gradientIndex = gradientIndex * 3;
+            r = (int) round(grad[gradientIndex] * 255);
+            g = (int) round(grad[gradientIndex+1] * 255);
+            b = (int) round(grad[gradientIndex+2] * 255);
         }
-        if (norm < 0.0) {
-            norm = 0.0;
-        }
-
-        // get color from gradient
-        int gradientIndex = (int) round(norm * (gradLen-1));
-        gradientIndex = gradientIndex * 3;
 
         // set the color
-        i = posy * w * dim + posx * dim;
-        result[i] = (int) round(grad[gradientIndex] * 255);
-        result[i+1] = (int) round(grad[gradientIndex+1] * 255);
-        result[i+2] = (int) round(grad[gradientIndex+2] * 255);
+        result[i] = r;
+        result[i+1] = g;
+        result[i+2] = b;
     }
     """ % (w, dim, len(gradient), tRange[0], tRange[1])
 

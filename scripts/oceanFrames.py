@@ -30,8 +30,8 @@ parser.add_argument('-end', dest="DATE_END", default="2016-12-31", help="Date en
 parser.add_argument('-lon', dest="LON_RANGE", default="20,420", help="Longitude range")
 parser.add_argument('-lat', dest="LAT_RANGE", default="80,-80", help="Latitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=72, help="Points per particle")
-parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.8, help="Number of pixels per degree of lon/lat")
-parser.add_argument('-particles', dest="PARTICLES", type=int, default=12000, help="Number of particles to display")
+parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=1.6, help="Number of pixels per degree of lon/lat")
+parser.add_argument('-particles', dest="PARTICLES", type=int, default=18000, help="Number of particles to display")
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-20.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
@@ -84,6 +84,10 @@ params["rolling_avg"] = args.ROLLING_AVERAGE
 
 # Read temperature data
 filenames = [INPUT_TEMPERATURE_FILE % str(month+1).zfill(2) for month in range(12)]
+
+# if debugging, just process 3 seconds
+debugFrames = FPS * 3
+
 print "Reading %s files asyncronously..." % len(filenames)
 pool = ThreadPool()
 tData = pool.map(readOceanCSVData, filenames)
@@ -105,11 +109,7 @@ lons = len(uData[0][depth][0]) # this should be 1201;
 total = lats * lons
 print "%s measurements found with %s degrees (lng) by %s degrees (lat)" % (timeCount, lons, lats)
 
-# if debugging, just do the first month
-if DEBUG:
-    filenames = filenames[:31]
-    if DEBUG == 1:
-        filenames = filenames[:2]
+
 
 frames = DURATION * FPS
 print "%s frames with duration %s" % (frames, DURATION)
@@ -128,7 +128,7 @@ def frameToImage(p):
     mu = dataProgress - dataIndexA0
     f0 = getWrappedData(data, dataCount, dataIndexA0, dataIndexA1)
     f1 = getWrappedData(data, dataCount, dataIndexB0, dataIndexB1)
-    lerpedUVData = lerpData(f0, f1, mu)
+    lerpedData = lerpData(f0, f1, mu)
 
     # Set up temperature background image
     # print "%s: calculating temperature colors" % p["fileOut"]
@@ -198,7 +198,7 @@ for frame in range(frames):
     p = params.copy()
     ms = 1.0 * frame / FPS * 1000
     filename = OUTPUT_FILE % str(frame+1).zfill(pad)
-    if not os.path.isfile(filename):
+    if not os.path.isfile(filename) or DEBUG >= 1:
         p.update({
             "progress": 1.0 * frame / (frames-1),
             "animationProgress": (1.0 * ms / params["animation_dur"]) % 1.0,
