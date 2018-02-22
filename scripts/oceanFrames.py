@@ -41,7 +41,8 @@ parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alp
 parser.add_argument('-avg', dest="ROLLING_AVERAGE", type=int, default=6, help="Do a rolling average of x data points")
 parser.add_argument('-dur', dest="DURATION", type=int, default=120, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=30, help="Frames per second")
-parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=3000, help="How many milliseconds each particle should animate over")
+parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=2000, help="How many milliseconds each particle should animate over")
+parser.add_argument('-line', dest="LINE_VISIBILITY", type=float, default=0.8, help="Higher = more visible lines")
 parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 
 args = parser.parse_args()
@@ -81,6 +82,7 @@ params["height"] = args.HEIGHT
 params["gradient"] = GRADIENT
 params["animation_dur"] = args.ANIMATION_DUR
 params["rolling_avg"] = args.ROLLING_AVERAGE
+params["line_visibility"] = args.LINE_VISIBILITY
 
 # Read temperature data
 filenames = [INPUT_TEMPERATURE_FILE % str(month+1).zfill(2) for month in range(12)]
@@ -140,47 +142,11 @@ def frameToImage(p):
     # print "%s: calculating particles..." % p["fileOut"]
     particles = getParticleData(lerpedData, p)
 
-    # Draw particles
     print "%s: drawing particles..." % p["fileOut"]
-    draw = ImageDraw.Draw(baseImage, 'RGBA')
-    w = p["width"]
-    h = p["height"]
-    hw = w/2
+    updatedPx = addParticlesToImage(baseImage, particles, p)
+    im = Image.fromarray(updatedPx, mode="RGB")
 
-    for particle in particles:
-        for i, point in enumerate(particle):
-            if i > 0:
-                prev = particle[i-1]
-                pwidth = max(1, int(round(point[3]/1000.0)));
-                # going from right side back to the left side
-                if prev[0]-point[0] > hw:
-                    intersection = lineIntersection(
-                        ((prev[0], prev[1]), (point[0]+w-1, point[1])),
-                        ((w-1, 0), (w-1, h))
-                    )
-                    if intersection:
-                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=pwidth)
-                        draw.line([0, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=pwidth)
-                    # else:
-
-
-                # going from left side around to the right side
-                elif point[0]-prev[0] > hw:
-                    intersection = lineIntersection(
-                        ((prev[0], prev[1]), (point[0]-w-1, point[1])),
-                        ((0, 0), (0, h))
-                    )
-                    if intersection:
-                        draw.line([prev[0], prev[1], intersection[0], intersection[1]], fill=(255, 255, 255, point[2]), width=pwidth)
-                        draw.line([w-1, intersection[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=pwidth)
-                    # else:
-
-                # draw line normally
-                else:
-                    draw.line([prev[0], prev[1], point[0], point[1]], fill=(255, 255, 255, point[2]), width=pwidth)
-    del draw
-
-    baseImage.save(p["fileOut"])
+    im.save(p["fileOut"])
     print "%s: finished." % p["fileOut"]
 
 

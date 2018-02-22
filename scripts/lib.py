@@ -97,6 +97,86 @@ def wrap(value, a, b):
 
 # ATMOSPHERE
 
+def addParticlesToImage(im, particles, p):
+    px = np.array(im)
+    px = px.astype(np.uint8)
+    shape = px.shape
+    h, w, dim = shape
+
+    px = px.reshape(-1)
+    particles = particles.reshape(-1)
+
+    # the kernel function
+    src = """
+    __kernel void addParticles(__global uchar *base, __global uchar *particles, __global uchar *result){
+        int w = %d;
+        int dim = %d;
+        float power = 1.0 - %f; // lower number = more visible lines
+
+        int posx = get_global_id(1);
+        int posy = get_global_id(0);
+        int i = posy * w * dim + posx * dim;
+        int j = posy * w + posx;
+
+        float white = 255.0;
+        float alpha = (float) particles[j] / 255.0;
+        int r = 0;
+        int g = 0;
+        int b = 0;
+
+        if (alpha > 0) {
+            alpha = pow(alpha*alpha + alpha*alpha, power);
+            if (alpha > 1.0) {
+                alpha = 1.0;
+            }
+            float inv = 1.0 - alpha;
+            r = (int) round((white * alpha) + ((float) base[i] * inv));
+            g = (int) round((white * alpha) + ((float) base[i+1] * inv));
+            b = (int) round((white * alpha) + ((float) base[i+2] * inv));
+        } else {
+            r = base[i];
+            g = base[i+1];
+            b = base[i+2];
+        }
+
+        result[i] = r;
+        result[i+1] = g;
+        result[i+2] = b;
+    }
+    """ % (w, dim, p["line_visibility"])
+
+    # Get platforms, both CPU and GPU
+    plat = cl.get_platforms()
+    GPUs = plat[0].get_devices(device_type=cl.device_type.GPU)
+    CPU = plat[0].get_devices()
+
+    # prefer GPUs
+    if GPUs and len(GPUs) > 0:
+        ctx = cl.Context(devices=GPUs)
+    else:
+        print "Warning: using CPU"
+        ctx = cl.Context(CPU)
+
+    # Create queue for each kernel execution
+    queue = cl.CommandQueue(ctx)
+    mf = cl.mem_flags
+
+    # Kernel function instantiation
+    prg = cl.Program(ctx, src).build()
+
+    inA =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=px)
+    inB =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=particles)
+    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, px.nbytes)
+
+    prg.addParticles(queue, [h, w], None , inA, inB, outResult)
+
+    # Copy result
+    result = np.empty_like(px)
+    cl.enqueue_copy(queue, result, outResult)
+
+    result = result.reshape(shape)
+    return result;
+
 def combineData(tData, uData, vData, uvLonRange, uvLatRange):
     depth = 0
     tLen = len(tData)
@@ -372,7 +452,7 @@ def getParticleData(data, p):
     dh = len(data)
     dw = len(data[0])
 
-    result = np.zeros(h * w * dim, dtype=np.float32)
+    result = np.zeros(tw * th, dtype=np.float32)
 
     # print "%s x %s x %s = %s" % (w, h, dim, len(result))
 
@@ -390,9 +470,37 @@ def getParticleData(data, p):
 
     # the kernel function
     src = """
+
     static float lerp(float a, float b, float mu) {
         return (b - a) * mu + a;
     }
+
+    static float det(float a0, float a1, float b0, float b1) {
+        return a0 * b1 - a1 * b0;
+    }
+
+    static float2 lineIntersection(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3) {
+        float xd0 = x0 - x1;
+        float xd1 = x2 - x3;
+        float yd0 = y0 - y1;
+        float yd1 = y2 - y3;
+
+        float div = det(xd0, xd1, yd0, yd1);
+
+        float2 intersection;
+        intersection.x = -1.0;
+        intersection.y = -1.0;
+
+        if (div != 0.0) {
+            float d1 = det(x0, y0, x1, y1);
+            float d2 = det(x2, y2, x3, y3);
+            intersection.x = det(d1, d2, xd0, xd1) / div;
+            intersection.y = det(d1, d2, yd0, yd1) / div;
+        }
+
+        return intersection;
+    }
+
 
     static float norm(float value, float a, float b) {
         float n = (value - a) / (b - a);
@@ -414,6 +522,49 @@ def getParticleData(data, p):
         return value;
     }
 
+    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, float alpha);
+
+    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, float alpha) {
+        int dx = abs(x1-x0);
+        int dy = abs(y1-y0);
+
+        if (dx==0 && dy==0) {
+            return;
+        }
+
+        int sy = 1;
+        int sx = 1;
+        if (y0>=y1) {
+            sy = -1;
+        }
+        if (x0>=x1) {
+            sx = -1;
+        }
+        int err = dx/2;
+        if (dx<=dy) {
+            err = -dy/2;
+        }
+        int e2 = err;
+
+        int x = x0;
+        int y = y0;
+        for(int i=0; i<w; i++){
+            p[y*w+x] = alpha;
+            if (x==x1 && y==y1) {
+                break;
+            }
+            e2 = err;
+            if (e2 >-dx) {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 < dy) {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
     __kernel void getParticles(__global float *data, __global float *pData, __global float *result){
         int points = %d;
         int dw = %d;
@@ -425,8 +576,6 @@ def getParticleData(data, p):
         float magMax = %f;
         float alphaMin = %f;
         float alphaMax = %f;
-        float lineMin = %f;
-        float lineMax = %f;
         float velocityMult = %f;
 
         // get current position
@@ -459,34 +608,62 @@ def getParticleData(data, p):
             float mag = sqrt(u * u + v * v);
             mag = norm(mag, magMin, magMax);
 
-            // determine alpha transparency and line width based on magnitude and offset
+            // determine alpha transparency based on magnitude and offset
             float jp = (float) j / (float) (points-1);
             float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
             progressMultiplier = 1.0 - progressMultiplier;
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
-            float linewidth = lerp(lineMin, lineMax, mag * progressMultiplier);
 
-            int pindex = i * points * 4 + j * 4;
-            result[pindex] = round(x);
-            result[pindex+1] = round(y);
-            result[pindex+2] = round(alpha);
-            result[pindex+3] = round(linewidth*1000);
+            float x1 = x + u * velocityMult;
+            float y1 = y + (-v) * velocityMult;
 
-            x = x + u * velocityMult;
-            y = y + (-v) * velocityMult;
-
-            if (y < 0.0) {
-                y = 0.0;
+            // clamp y
+            if (y1 < 0.0) {
+                y1 = 0.0;
             }
-            if (y > (th-1.0)) {
-                y = th-1.0;
+            if (y1 > (th-1.0)) {
+                y1 = th-1.0;
             }
-            x = wrap(x, 0.0, tw-1);
-            dx = x / tw;
-            dy = y / th;
+
+            // check for no movement
+            if (x==x1 && y==y1) {
+                break;
+
+            // check for invisible line
+            } else if (alpha < 1.0) {
+                // continue
+
+            // wrap from left to right
+            } else if (x1 < 0) {
+                float2 intersection = lineIntersection(x, y, x1, y1, (float) 0.0, (float) 0.0, (float) 0.0, th);
+                if (intersection.y > 0.0) {
+                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, round(alpha));
+                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, round(alpha));
+                }
+
+            // wrap from right to left
+            } else if (x1 > tw-1.0) {
+                float2 intersection = lineIntersection(x, y, x1, y1, (float) (tw-1.0), (float) 0.0, (float) (tw-1.0), th);
+                if (intersection.y > 0.0) {
+                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, round(alpha));
+                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, round(alpha));
+                }
+
+            // draw it normally
+            } else {
+                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, round(alpha));
+            }
+
+            // wrap x
+            x1 = wrap(x1, 0.0, tw-1);
+            dx = x1 / tw;
+            dy = y1 / th;
+
+            x = x1;
+            y = y1;
         }
     }
-    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["linewidth_range"][0], p["linewidth_range"][1], p["velocity_multiplier"])
+    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"])
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()
@@ -517,8 +694,8 @@ def getParticleData(data, p):
     # Copy result
     cl.enqueue_copy(queue, result, outResult)
 
-    result = result.reshape((h, w, dim))
-    result = result.astype(int)
+    result = result.reshape((th, tw))
+    result = result.astype(np.uint8)
 
     return result;
 
