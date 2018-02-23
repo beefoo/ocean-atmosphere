@@ -111,8 +111,6 @@ lons = len(uData[0][depth][0]) # this should be 1201;
 total = lats * lons
 print "%s measurements found with %s degrees (lng) by %s degrees (lat)" % (timeCount, lons, lats)
 
-
-
 frames = DURATION * FPS
 print "%s frames with duration %s" % (frames, DURATION)
 
@@ -130,6 +128,10 @@ def frameToImage(p):
     mu = dataProgress - dataIndexA0
     f0 = getWrappedData(data, dataCount, dataIndexA0, dataIndexA1)
     f1 = getWrappedData(data, dataCount, dataIndexB0, dataIndexB1)
+    if len(f0) != len(f1):
+        print "%s: ERROR - data mismatch %s (%s) vs %s (%s)" % (p["fileOut"], dataIndexA0, len(f0), dataIndexB0, len(f1))
+        sys.exit(1)
+        return
     lerpedData = lerpData(f0, f1, mu)
 
     # Set up temperature background image
@@ -186,3 +188,7 @@ data = pool.map(frameToImage, frameParams)
 pool.close()
 pool.join()
 print "Done."
+
+# print "Making %s image files syncronously..." % frames
+# for p in frameParams:
+#     frameToImage(p)

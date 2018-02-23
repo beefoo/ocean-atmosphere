@@ -38,7 +38,9 @@ def getWrappedData(data, count, start, end):
     if end <= count:
         wData = data[start:end]
     else: # wrap around to the beginning
-        wData = data[start:count] + data[0:(end-count)]
+        d1 = data[start:count]
+        d2 = data[0:(end-count)]
+        wData = d1[:] + d2[:]
     return wData
 
 def lerp(a, b, mu):
@@ -330,6 +332,9 @@ def combineData(tData, uData, vData, uvLonRange, uvLatRange):
     cl.enqueue_copy(queue, result, outResult)
 
     result = result.reshape(shape)
+    result.astype(float)
+    result = result.tolist()
+
     return result;
 
 # Interpolate between two datasets using GPU
@@ -337,7 +342,6 @@ def lerpData(dataA, dataB, mu, offset=0):
     dataLen = len(dataA)
     if dataLen != len(dataB):
         print "Warning: data length mismatch"
-
     shape = (len(dataA[0]), len(dataA[0][0]), 3)
     h, w, dim = shape
     result = np.empty(h * w * dim, dtype=np.float32)
