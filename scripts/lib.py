@@ -85,9 +85,9 @@ def parseNumber(string):
     except ValueError:
         num = 0.0
         print "Value error: %s" % string
-    if num <= -9999 or num >= 9999:
-        print "Value unknown: %s" % string
-        num = 0.0
+    # if num <= -9999 or num >= 9999:
+    #     print "Value unknown: %s" % string
+    #     num = 0.0
     return num
 
 def wrap(value, a, b):
@@ -97,7 +97,39 @@ def wrap(value, a, b):
         value = a + (value - b)
     return value
 
-# ATMOSPHERE
+def frameToImage(p):
+    # Determine the two vector fields to interpolate from
+    print "%s: processing data..." % p["fileOut"]
+    dataCount = len(p["dates"])
+    dataProgress = p["progress"] * (dataCount - 1)
+    dataIndexA0 = int(math.floor(dataProgress))
+    dataIndexA1 = dataIndexA0 + p["rolling_avg"]
+    dataIndexB0 = int(math.ceil(dataProgress))
+    dataIndexB1 = dataIndexB0 + p["rolling_avg"]
+    mu = dataProgress - dataIndexA0
+    f0 = getWrappedData(p["data"], dataCount, dataIndexA0, dataIndexA1)
+    f1 = getWrappedData(p["data"], dataCount, dataIndexB0, dataIndexB1)
+    offset = int(round(p["lon_range"][0] + 180.0))
+    if offset != 0.0:
+        offset = int(round(offset / 360.0 * len(f0[0][0])))
+    lerpedData = lerpData(f0, f1, mu, offset)
+
+    # Set up temperature background image
+    # print "%s: calculating temperature colors" % p["fileOut"]
+    baseImage = getTemperatureImage(lerpedData, p)
+    baseImage = baseImage.resize((p["width"], p["height"]), resample=Image.BICUBIC)
+    # baseImage = baseImage.convert(mode="RGBA")
+
+    # Setup particles
+    # print "%s: calculating particles..." % p["fileOut"]
+    particles = getParticleData(lerpedData, p)
+
+    print "%s: drawing particles..." % p["fileOut"]
+    updatedPx = addParticlesToImage(baseImage, particles, p)
+    im = Image.fromarray(updatedPx, mode="RGB")
+
+    im.save(p["fileOut"])
+    print "%s: finished." % p["fileOut"]
 
 def addParticlesToImage(im, particles, p):
     px = np.array(im)
@@ -177,164 +209,6 @@ def addParticlesToImage(im, particles, p):
     cl.enqueue_copy(queue, result, outResult)
 
     result = result.reshape(shape)
-    return result;
-
-def combineData(tData, uData, vData, uvLonRange, uvLatRange):
-    depth = 0
-    tLen = len(tData)
-    uvLen = len(uData)
-    th = len(tData[0])
-    tw = len(tData[0][0])
-    uvh = len(uData[0][depth])
-    uvw = len(uData[0][depth][0])
-    uvlon0, uvlon1 = uvLonRange
-    uvlat0, uvlat1 = uvLatRange
-
-    tData = np.array(tData, dtype=np.float32)
-    uData = np.array(uData)
-    vData = np.array(vData)
-
-    # remove nan values
-    uData = np.nan_to_num(uData)
-    vData = np.nan_to_num(vData)
-
-    uData = uData.astype(np.float32)
-    vData = vData.astype(np.float32)
-
-    # convert to 1-dimension
-    tData = tData.reshape(-1)
-    uData = uData.reshape(-1)
-    vData = vData.reshape(-1)
-
-    w = int(uvw * (360.0/(uvlon1-uvlon0)))
-    h = w / 2
-    dim = 3
-    shape = (uvLen, h, w, dim)
-    result = np.empty(uvLen * h * w * dim, dtype=np.float32)
-
-    # the kernel function
-    src = """
-    static float lerpT(float a, float b, float mu) {
-        return (b - a) * mu + a;
-    }
-
-    static float normLat(float value, float a, float b) {
-        return (value - a) / (b - a);
-    }
-
-    static float normLon(float value, float a, float b) {
-        float mvalue = value;
-        if (value < a) {
-            mvalue = value + 360.0;
-        }
-        if (value > b) {
-            mvalue = value - 360.0;
-        }
-        return (mvalue - a) / (b - a);
-    }
-
-    __kernel void combineData(__global float *tdata, __global float *udata, __global float *vdata, __global float *result){
-        int tLen = %d;
-        int uvLen = %d;
-        int uvw = %d;
-        int uvh = %d;
-        int tw = %d;
-        int th = %d;
-        int w = %d;
-        int h = %d;
-        int dim = %d;
-        float uvlon0 = %f;
-        float uvlon1 = %f;
-        float uvlat0 = %f;
-        float uvlat1 = %f;
-
-        // get current position
-        int posx = get_global_id(2);
-        int posy = get_global_id(1);
-        int post = get_global_id(0);
-
-        // get position in float
-        float xf = (float) posx / (float) (w-1);
-        float yf = (float) posy / (float) (h-1);
-        float tf = (float) post / (float) (uvLen-1);
-
-        // get interpolated temperature
-        int tposx = (int) round(xf * (tw-1));
-        int tposy = (int) round(yf * (th-1));
-        float tpostf = tf * (float) tLen;
-        int tposta = (int) floor(tpostf);
-        int tpostb = (int) ceil(tpostf);
-        if (tpostb >= tLen) { // wrap around to the beginning
-            tpostb = 0;
-        }
-        float tmu = tpostf - floor(tpostf);
-        int i0 = tposta * tw * th + tposy * tw + tposx;
-        int i1 = tpostb * tw * th + tposy * tw + tposx;
-        float tValue = lerpT(tdata[i0], tdata[i1], tmu);
-
-        // convert position from lon 20,420 to -180,180 and lat 80,-80 to 90,-90
-        float lat = lerpT(90.0, -90.0, yf);
-        float lon = lerpT(-180.0, 180.0, xf);
-        float latn = normLat(lat, uvlat0, uvlat1);
-        float lonn = normLon(lon, uvlon0, uvlon1);
-        float uValue = 0.0;
-        float vValue = 0.0;
-
-        // check for invalid latitudes
-        if (latn >= 0.0 && latn <= 1.0) {
-            int posUVx = (int) round(lonn * (float) (uvw-1));
-            int posUVy = (int) round(latn * (float) (uvh-1));
-            int uvi = post * uvw * uvh + posUVy * uvw + posUVx;
-            uValue = udata[uvi];
-            vValue = vdata[uvi];
-            if (uValue >= 9999.0 || uValue <= -9999.0) {
-                uValue = 0.0;
-            }
-            if (vValue >= 9999.0 || vValue <= -9999.0) {
-                vValue = 0.0;
-            }
-        }
-
-        int i = post * w * h * dim + posy * w * dim + posx * dim;
-        result[i] = tValue;
-        result[i+1] = uValue;
-        result[i+2] = vValue;
-    }
-    """ % (tLen, uvLen, uvw, uvh, tw, th, w, h, dim, uvlon0, uvlon1, uvlat0, uvlat1)
-
-    # Get platforms, both CPU and GPU
-    plat = cl.get_platforms()
-    GPUs = plat[0].get_devices(device_type=cl.device_type.GPU)
-    CPU = plat[0].get_devices()
-
-    # prefer GPUs
-    if GPUs and len(GPUs) > 0:
-        ctx = cl.Context(devices=GPUs)
-    else:
-        print "Warning: using CPU"
-        ctx = cl.Context(CPU)
-
-    # Create queue for each kernel execution
-    queue = cl.CommandQueue(ctx)
-    mf = cl.mem_flags
-
-    # Kernel function instantiation
-    prg = cl.Program(ctx, src).build()
-
-    inT =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=tData)
-    inU =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=uData)
-    inV =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=vData)
-    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, result.nbytes)
-
-    prg.combineData(queue, [uvLen, h, w], None , inT, inU, inV, outResult)
-
-    # Copy result
-    cl.enqueue_copy(queue, result, outResult)
-
-    result = result.reshape(shape)
-    result.astype(float)
-    result = result.tolist()
-
     return result;
 
 # Interpolate between two datasets using GPU
@@ -601,10 +475,10 @@ def getParticleData(data, p):
             float v = data[dindex+2];
 
             // check for invalid values
-            if (u >= 9999.0 || u <= -9999.0) {
+            if (u >= 999.0 || u <= -999.0) {
                 u = 0.0;
             }
-            if (v >= 9999.0 || v <= -9999.0) {
+            if (v >= 999.0 || v <= -999.0) {
                 v = 0.0;
             }
 
@@ -738,7 +612,7 @@ def getTemperatureImage(data, p):
         int b = 36;
 
         // assume large values are invalid
-        if (temperature > -9999.0 && temperature < 9999.0) {
+        if (temperature > -999.0 && temperature < 999.0) {
             // normalize the temperature
             float norm = (temperature - minValue) / (maxValue - minValue);
             // clamp
@@ -798,7 +672,9 @@ def getTemperatureImage(data, p):
     imOut = Image.fromarray(result, mode="RGB")
     return imOut;
 
-def readAtmosphereCSVData(filename):
+def readCSVData(p):
+    filename = p["filename"]
+    unit = p["unit"]
     print "Reading %s" % filename
     data = []
     with gzip.open(filename, 'rb') as f:
@@ -809,7 +685,10 @@ def readAtmosphereCSVData(filename):
             row = line.split(",")
             for j, triple in enumerate(row):
                 triple = triple.split(":")
-                triple[0] = parseNumber(triple[0]) - 273.15 # temperature: convert kelvin to celsius
+                delta = 0
+                if unit=="Kelvin":
+                    delta = 273.15
+                triple[0] = parseNumber(triple[0]) - delta # temperature: convert kelvin to celsius if necessary
                 triple[1] = parseNumber(triple[1]) # u vector
                 triple[2] = parseNumber(triple[2]) # v vector
                 row[j] = tuple(triple)
@@ -817,7 +696,7 @@ def readAtmosphereCSVData(filename):
     print "Done reading %s" % filename
     return data
 
-def readOceanCSVData(filename):
+def readSSTCSVData(filename):
     print "Reading %s" % filename
     data = []
     with gzip.open(filename, 'rb') as f:

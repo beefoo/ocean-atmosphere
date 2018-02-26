@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# ffmpeg -framerate 30/1 -i ../output/composite/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/composite_sample.mp4
+
 import argparse
 import math
 from multiprocessing import Pool
@@ -13,8 +15,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-in', dest="INPUT_FILE", default="../output/atmosphere/frame%s.png,../output/ocean/frame%s.png", help="Input image files")
 parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/composite/frame%s.png", help="Output image file")
 parser.add_argument('-frames', dest="FRAMES", type=int, default=3600, help="Number of frames")
-parser.add_argument('-w', dest="WIDTH", type=int, default=2048, help="Target width")
-parser.add_argument('-h', dest="HEIGHT", type=int, default=2048, help="Target height")
+parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target width")
+parser.add_argument('-height', dest="HEIGHT", type=int, default=2048, help="Target height")
 
 args = parser.parse_args()
 
@@ -27,7 +29,7 @@ HEIGHT = args.HEIGHT
 pad = len(str(FRAMES))
 params = []
 for f in range(FRAMES):
-    frame = (f+1).zfill(pad)
+    frame = str(f+1).zfill(pad)
     fnames = [ff % frame for ff in INPUT_FILE]
     params.append({
         "w": WIDTH,
