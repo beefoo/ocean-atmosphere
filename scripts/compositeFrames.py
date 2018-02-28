@@ -16,7 +16,6 @@ parser.add_argument('-in', dest="INPUT_FILE", default="../output/atmosphere/fram
 parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/composite/frame%s.png", help="Output image file")
 parser.add_argument('-frames', dest="FRAMES", type=int, default=3600, help="Number of frames")
 parser.add_argument('-width', dest="WIDTH", type=int, default=1024, help="Target width")
-parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target height")
 
 args = parser.parse_args()
 
@@ -24,7 +23,7 @@ INPUT_FILE = args.INPUT_FILE.split(",")
 OUTPUT_FILE = args.OUTPUT_FILE
 FRAMES = args.FRAMES
 WIDTH = args.WIDTH
-HEIGHT = args.HEIGHT
+HEIGHT = args.WIDTH
 
 pad = len(str(FRAMES))
 params = []
