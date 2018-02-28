@@ -612,7 +612,7 @@ def getTemperatureImage(data, p):
         int b = 36;
 
         // assume large values are invalid
-        if (temperature > -999.0 && temperature < 999.0) {
+        if (temperature > -99.0 && temperature < 99.0) {
             // normalize the temperature
             float norm = (temperature - minValue) / (maxValue - minValue);
             // clamp

@@ -15,8 +15,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-in', dest="INPUT_FILE", default="../output/atmosphere/frame%s.png,../output/ocean/frame%s.png", help="Input image files")
 parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/composite/frame%s.png", help="Output image file")
 parser.add_argument('-frames', dest="FRAMES", type=int, default=3600, help="Number of frames")
-parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target width")
-parser.add_argument('-height', dest="HEIGHT", type=int, default=2048, help="Target height")
+parser.add_argument('-width', dest="WIDTH", type=int, default=1024, help="Target width")
+parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target height")
 
 args = parser.parse_args()
 
@@ -48,6 +48,11 @@ def compositeFiles(p):
     im1 = Image.open(fname1)
     im2 = Image.open(fname2)
 
+    sw, sh = im1.size
+    if sw != w:
+        im1 = im1.resize((w, hh), resample=Image.BICUBIC)
+        im2 = im2.resize((w, hh), resample=Image.BICUBIC)
+
     comp = Image.new('RGB', (p["w"], p["h"]))
     comp.paste(im1)
     comp.paste(im2, box=(0, hh))
@@ -61,3 +66,5 @@ data = pool.map(compositeFiles, params)
 pool.close()
 pool.join()
 print "Done."
+
+# compositeFiles(params[0])
