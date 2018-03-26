@@ -232,6 +232,11 @@ def lerpData(dataA, dataB, mu, offset=0):
 
     # the kernel function
     src = """
+
+    static bool isValid(float value) {
+        return (value > -999.0 && value < 999.0);
+    }
+
     __kernel void lerpData(__global float *a, __global float *b, __global float *result){
         int dlen = %d;
         int h = %d;
@@ -264,27 +269,56 @@ def lerpData(dataA, dataB, mu, offset=0):
         float b1 = 0;
         float b2 = 0;
         float b3 = 0;
+        float a1count = 0;
+        float a2count = 0;
+        float a3count = 0;
+        float b1count = 0;
+        float b2count = 0;
+        float b3count = 0;
         for(int k=0; k<dlen; k++) {
             int i = k * h * w * dim + posy * w * dim + posxOffset * dim;
-            a1 = a1 + a[i];
-            a2 = a2 + a[i+1];
-            a3 = a3 + a[i+2];
-            b1 = b1 + b[i];
-            b2 = b2 + b[i+1];
-            b3 = b3 + b[i+2];
+            if (isValid(a[i])) {
+                a1 = a1 + a[i];
+                a1count = a1count + 1.0;
+            }
+            if (isValid(a[i+1])) {
+                a2 = a2 + a[i+1];
+                a2count = a2count + 1.0;
+            }
+            if (isValid(a[i+2])) {
+                a3 = a3 + a[i+2];
+                a3count = a3count + 1.0;
+            }
+            if (isValid(b[i])) {
+                b1 = b1 + b[i];
+                b1count = b1count + 1.0;
+            }
+            if (isValid(b[i+1])) {
+                b2 = b2 + b[i+1];
+                b2count = b2count + 1.0;
+            }
+            if (isValid(b[i+2])) {
+                b3 = b3 + b[i+2];
+                b3count = b3count + 1.0;
+            }
         }
-        float denom = (float) dlen;
-        a1 = a1 / denom;
-        a2 = a2 / denom;
-        a3 = a3 / denom;
-        b1 = b1 / denom;
-        b2 = b2 / denom;
-        b3 = b3 / denom;
+        if (a1count > 0) { a1 = a1 / a1count; } else { a1 = -9999.0; }
+        if (a2count > 0) { a2 = a2 / a2count; } else { a2 = -9999.0; }
+        if (a3count > 0) { a3 = a3 / a3count; } else { a3 = -9999.0; }
+        if (b1count > 0) { b1 = b1 / b1count; } else { b1 = -9999.0; }
+        if (b2count > 0) { b2 = b2 / b2count; } else { b2 = -9999.0; }
+        if (b3count > 0) { b3 = b3 / b3count; } else { b3 = -9999.0; }
 
         // set result
-        result[j] = a1 + mu * (b1-a1);
-        result[j+1] = a2 + mu * (b2-a2);
-        result[j+2] = a3 + mu * (b3-a3);
+        float u = a1 + mu * (b1-a1);
+        float v = a2 + mu * (b2-a2);
+        float t = a3 + mu * (b3-a3);
+        if (a1 <= -9999.0 || b1 <= -9999.0) u = -9999.0;
+        if (a2 <= -9999.0 || b2 <= -9999.0) v = -9999.0;
+        if (a3 <= -9999.0 || b3 <= -9999.0) t = -9999.0;
+        result[j] = u;
+        result[j+1] = v;
+        result[j+2] = t;
     }
     """ % (dataLen, h, w, dim, mu, offset)
 
@@ -324,7 +358,7 @@ def getParticleData(data, p):
     w = p["points_per_particle"]
     dim = 4 # four points: x, y, alpha, width
 
-    offset = p["animationProgress"]
+    offset = 1.0 - p["animationProgress"]
     tw = p["width"]
     th = p["height"]
     dh = len(data)
@@ -489,7 +523,6 @@ def getParticleData(data, p):
             // determine alpha transparency based on magnitude and offset
             float jp = (float) j / (float) (points-1);
             float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
-            progressMultiplier = 1.0 - progressMultiplier;
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
 
             float x1 = x + u * velocityMult;
@@ -607,9 +640,9 @@ def getTemperatureImage(data, p):
         // get index
         int i = posy * w * dim + posx * dim;
         float temperature = d[i];
-        int r = 36;
-        int g = 36;
-        int b = 36;
+        int r = 60;
+        int g = 60;
+        int b = 60;
 
         // assume large values are invalid
         if (temperature > -99.0 && temperature < 99.0) {

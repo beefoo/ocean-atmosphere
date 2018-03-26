@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 1.6 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -debug 1
+# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.5 -ppp 240 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -debug 2
 # python generateFrames.py -debug 1
 
 # ffmpeg -framerate 30/1 -i ../output/atmosphere/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_sample.mp4
@@ -96,10 +96,10 @@ while date <= dateEnd:
         dates.append(date)
     date += datetime.timedelta(days=1)
 
-# if debugging, just process 3 seconds
-debugFrames = FPS * 3
+# if debugging, just process 2 seconds
+debugFrames = FPS * 2
 if DEBUG:
-    filenames = filenames[:62]
+    filenames = filenames[:40]
     if DEBUG == 1:
         filenames = filenames[:2]
 
