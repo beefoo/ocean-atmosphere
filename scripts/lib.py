@@ -43,6 +43,16 @@ def getWrappedData(data, count, start, end):
         wData = d1[:] + d2[:]
     return wData
 
+def halton(index, base=3):
+    result = 0
+    f = 1.0 / base
+    i = index
+    while i > 0:
+        result += f * float(i % base)
+        i = math.floor(i / base)
+        f = f / float(base)
+    return result
+
 def lerp(a, b, mu):
     return (b-a) * mu + a
 
@@ -302,23 +312,23 @@ def lerpData(dataA, dataB, mu, offset=0):
                 b3count = b3count + 1.0;
             }
         }
-        if (a1count > 0) { a1 = a1 / a1count; } else { a1 = -9999.0; }
-        if (a2count > 0) { a2 = a2 / a2count; } else { a2 = -9999.0; }
-        if (a3count > 0) { a3 = a3 / a3count; } else { a3 = -9999.0; }
-        if (b1count > 0) { b1 = b1 / b1count; } else { b1 = -9999.0; }
-        if (b2count > 0) { b2 = b2 / b2count; } else { b2 = -9999.0; }
-        if (b3count > 0) { b3 = b3 / b3count; } else { b3 = -9999.0; }
+        if (a1count > 0) { a1 = a1 / a1count; }
+        // else { a1 = -9999.0; }
+        if (a2count > 0) { a2 = a2 / a2count; }
+        if (a3count > 0) { a3 = a3 / a3count; }
+        if (b1count > 0) { b1 = b1 / b1count; }
+        // else { b1 = -9999.0; }
+        if (b2count > 0) { b2 = b2 / b2count; }
+        if (b3count > 0) { b3 = b3 / b3count; }
 
         // set result
-        float u = a1 + mu * (b1-a1);
-        float v = a2 + mu * (b2-a2);
-        float t = a3 + mu * (b3-a3);
-        if (a1 <= -9999.0 || b1 <= -9999.0) u = -9999.0;
-        if (a2 <= -9999.0 || b2 <= -9999.0) v = -9999.0;
-        if (a3 <= -9999.0 || b3 <= -9999.0) t = -9999.0;
-        result[j] = u;
-        result[j+1] = v;
-        result[j+2] = t;
+        float t = a1 + mu * (b1-a1);
+        float u = a2 + mu * (b2-a2);
+        float v = a3 + mu * (b3-a3);
+        // if (a1 <= -9999.0 || b1 <= -9999.0) t = -9999.0;
+        result[j] = t;
+        result[j+1] = u;
+        result[j+2] = v;
     }
     """ % (dataLen, h, w, dim, mu, offset)
 
@@ -640,9 +650,9 @@ def getTemperatureImage(data, p):
         // get index
         int i = posy * w * dim + posx * dim;
         float temperature = d[i];
-        int r = 60;
-        int g = 60;
-        int b = 60;
+        int r = 45;
+        int g = 50;
+        int b = 55;
 
         // assume large values are invalid
         if (temperature > -99.0 && temperature < 99.0) {

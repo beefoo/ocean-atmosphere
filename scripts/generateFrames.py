@@ -122,9 +122,9 @@ print "%s frames with duration %s" % (frames, DURATION)
 
 # Initialize particle starting positions
 particleProperties = [
-    (random.random(), # a random x
-     random.random(), # a random y
-     random.random()) # a random offset
+    (halton(i*3), # a stably random x
+     halton(i*3+1), # a stably random y
+     halton(i*3+2)) # a stably random offset
     for i in range(params["particles"])
 ]
 
