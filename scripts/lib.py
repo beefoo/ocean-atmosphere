@@ -43,7 +43,7 @@ def getWrappedData(data, count, start, end):
         wData = d1[:] + d2[:]
     return wData
 
-def halton(index, base=3):
+def halton(index, base=7):
     result = 0
     f = 1.0 / base
     i = index
@@ -99,6 +99,10 @@ def parseNumber(string):
     #     print "Value unknown: %s" % string
     #     num = 0.0
     return num
+
+def pseudoRandom(seed):
+    random.seed(seed)
+    return random.random()
 
 def wrap(value, a, b):
     if value < a:
