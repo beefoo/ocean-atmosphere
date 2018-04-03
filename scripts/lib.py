@@ -166,25 +166,34 @@ def addParticlesToImage(im, particles, p):
         int i = posy * w * dim + posx * dim;
         int j = posy * w + posx;
 
-        float white = 255.0;
         float alpha = (float) particles[j] / 255.0;
-        int r = 0;
-        int g = 0;
-        int b = 0;
+        // float white = 255.0;
+        // int r = 0;
+        // int g = 0;
+        // int b = 0;
+        int r = base[i];
+        int g = base[i+1];
+        int b = base[i+2];
 
         if (alpha > 0) {
             alpha = pow(alpha*alpha + alpha*alpha, power);
             if (alpha > 1.0) {
                 alpha = 1.0;
             }
-            float inv = 1.0 - alpha;
-            r = (int) round((white * alpha) + ((float) base[i] * inv));
-            g = (int) round((white * alpha) + ((float) base[i+1] * inv));
-            b = (int) round((white * alpha) + ((float) base[i+2] * inv));
+            // float inv = 1.0 - alpha;
+            // r = (int) round((white * alpha) + ((float) base[i] * inv));
+            // g = (int) round((white * alpha) + ((float) base[i+1] * inv));
+            // b = (int) round((white * alpha) + ((float) base[i+2] * inv));
+            r = (int) round((r * alpha));
+            g = (int) round((g * alpha));
+            b = (int) round((b * alpha));
         } else {
-            r = base[i];
-            g = base[i+1];
-            b = base[i+2];
+            // r = base[i];
+            // g = base[i+1];
+            // b = base[i+2];
+            r = 0;
+            g = 0;
+            b = 0;
         }
 
         result[i] = r;

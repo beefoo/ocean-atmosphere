@@ -2,6 +2,7 @@
 
 # python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.5 -ppp 240 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -debug 2
 # python generateFrames.py -debug 1
+# python generateFrames.py -debug 1 -out "../output/meta%s.png" -width 17280 -height 8640 -vel 0.2 -ppp 480 -particles 18000
 
 # ffmpeg -framerate 30/1 -i ../output/atmosphere/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_sample.mp4
 # ffmpeg -framerate 30/1 -i ../output/ocean/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/ocean_sample.mp4
