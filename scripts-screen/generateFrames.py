@@ -138,6 +138,7 @@ print "Lons (%s) x Lats (%s) = %s" % (lons, lats, total)
 dateCount = len(dates)
 frames = DURATION * FPS
 print "%s frames with duration %s" % (frames, DURATION)
+params["duration_ms"] = DURATION * 1000
 
 # Initialize particle starting positions
 particleProperties = [
@@ -155,6 +156,7 @@ for frame in range(frames):
     filename = OUTPUT_FILE % str(frame+1).zfill(pad)
     if not os.path.isfile(filename) or DEBUG >= 1:
         p.update({
+            "ms": ms,
             "progress": 1.0 * frame / (frames-1),
             "animationProgress": (1.0 * ms / params["animation_dur"]) % 1.0,
             "frame": frame,

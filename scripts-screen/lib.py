@@ -386,6 +386,16 @@ def getParticleData(data, p):
     w = p["points_per_particle"]
     dim = 4 # four points: x, y, alpha, width
 
+    # fade in and out
+    animation_dur = p["animation_dur"]
+    dur = p["duration_ms"]
+    ms = p["ms"]
+    fadeProgress = 1.0
+    if ms < animation_dur:
+        fadeProgress = 1.0 * ms / animation_dur
+    elif ms > (dur-animation_dur):
+        fadeProgress = 1.0 - 1.0 * (ms - (dur-animation_dur)) / animation_dur
+
     offset = 1.0 - p["animationProgress"]
     tw = p["width"]
     th = p["height"]
@@ -517,6 +527,7 @@ def getParticleData(data, p):
         float alphaMin = %f;
         float alphaMax = %f;
         float velocityMult = %f;
+        float fadeProgress = %f;
 
         // get current position
         int i = get_global_id(0);
@@ -551,7 +562,13 @@ def getParticleData(data, p):
             // determine alpha transparency based on magnitude and offset
             float jp = (float) j / (float) (points-1);
             float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
+
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
+
+            // we are fading in/out
+            if (fadeProgress < 1.0 && fadeProgress < progressMultiplier) {
+                alpha = 0.0;
+            }
 
             float x1 = x + u * velocityMult;
             float y1 = y + (-v) * velocityMult;
@@ -602,7 +619,7 @@ def getParticleData(data, p):
             y = y1;
         }
     }
-    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"])
+    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"], fadeProgress)
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()
