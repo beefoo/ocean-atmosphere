@@ -121,12 +121,17 @@ def frameToImage(p):
     dataIndexB0 = int(math.ceil(dataProgress))
     dataIndexB1 = dataIndexB0 + p["rolling_avg"]
     mu = dataProgress - dataIndexA0
+
+    yStart = lerp(p["y_from"], p["y_to"], p["progress"])
+    yEnd = yStart + p["cropped_height"]
+
     f0 = getWrappedData(p["data"], dataCount, dataIndexA0, dataIndexA1)
     f1 = getWrappedData(p["data"], dataCount, dataIndexB0, dataIndexB1)
     offset = int(round(p["lon_range"][0] + 180.0))
     if offset != 0.0:
         offset = int(round(offset / 360.0 * len(f0[0][0])))
     lerpedData = lerpData(f0, f1, mu, offset)
+
     baseImage = p["base_image"]
 
     # Set up temperature background image
@@ -142,6 +147,9 @@ def frameToImage(p):
     print "%s: drawing particles..." % p["fileOut"]
     updatedPx = addParticlesToImage(baseImage, colorImage, particles, p)
     im = Image.fromarray(updatedPx, mode="RGB")
+
+    # crop the image
+    im = im.crop(box=(0, yStart, p["width"], yEnd))
 
     im.save(p["fileOut"])
     print "%s: finished." % p["fileOut"]

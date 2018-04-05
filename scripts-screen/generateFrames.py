@@ -33,7 +33,7 @@ parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.08
 parser.add_argument('-particles', dest="PARTICLES", type=int, default=12000, help="Number of particles to display")
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-20.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
-parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
+parser.add_argument('-height', dest="HEIGHT", type=int, default=384, help="Target image height")
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,60.0", help="Alpha range (0-255)")
@@ -44,7 +44,8 @@ parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=8000, help=
 parser.add_argument('-line', dest="LINE_VISIBILITY", type=float, default=0.5, help="Higher = more visible lines")
 parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 parser.add_argument('-unit', dest="TEMPERATURE_UNIT", default="Kelvin", help="Temperature unit")
-
+parser.add_argument('-lat0', dest="LAT_START", type=float, default=50.0, help="90 to -90")
+parser.add_argument('-lat1', dest="LAT_END", type=float, default=30.0, help="90 to -90")
 
 args = parser.parse_args()
 
@@ -80,11 +81,23 @@ params["linewidth_range"] = [float(d) for d in args.LINE_WIDTH_RANGE.split(",")]
 params["mag_range"] = [float(d) for d in args.MAGNITUDE_RANGE.split(",")]
 params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.split(",")]
 params["width"] = args.WIDTH
-params["height"] = args.HEIGHT
+params["height"] = args.WIDTH / 2
+params["cropped_height"] = args.HEIGHT
 params["gradient"] = GRADIENT
 params["animation_dur"] = args.ANIMATION_DUR
 params["rolling_avg"] = args.ROLLING_AVERAGE
 params["line_visibility"] = args.LINE_VISIBILITY
+
+# crop calculations
+latStart = norm(args.LAT_START, 90.0, -90.0)
+latEnd = norm(args.LAT_END, 90.0, -90.0)
+latHeight = 1.0 * params["cropped_height"] / params["height"]
+if (latStart + latHeight) > 1.0:
+    latStart = 1.0 - latHeight
+if (latEnd + latHeight) > 1.0:
+    latEnd = 1.0 - latHeight
+params["y_from"] = latStart * params["height"]
+params["y_to"] = latEnd * params["height"]
 
 # open and resize base image
 baseImage = Image.open(args.BASE_IMAGE)
@@ -117,8 +130,8 @@ pool.close()
 pool.join()
 print "Done reading files"
 
-lons = len(data[0])
-lats = len(data[0][0])
+lats = len(data[0])
+lons = len(data[0][0])
 total = lons * lats
 print "Lons (%s) x Lats (%s) = %s" % (lons, lats, total)
 
