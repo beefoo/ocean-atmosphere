@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 
-# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.6 -ppp 240 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -anim 1200 -debug 2
-# python generateFrames.py -debug 1
+# python generateFrames.py -width 1024 -height 512
 # python generateFrames.py -debug 1 -out "../output/meta%s.png" -width 17280 -height 8640 -vel 0.2 -ppp 480 -particles 18000
 
-# ffmpeg -framerate 30/1 -i ../output/atmosphere/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_sample.mp4
-# ffmpeg -framerate 30/1 -i ../output/ocean/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/ocean_sample.mp4
+# ffmpeg -framerate 30/1 -i ../output/atmosphere-screen/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_screen_sample.mp4
 
 import argparse
 import datetime
@@ -23,10 +21,11 @@ import sys
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-in', dest="INPUT_FILE", default="../data/raw/atmosphere_100000/gfsanl_4_%s_0000_000.csv.gz", help="Input CSV files")
-parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/atmosphere/frame%s.png", help="Output image file")
-parser.add_argument('-grad', dest="GRADIENT_FILE", default="../data/colorGradientRainbow.json", help="Color gradient json file")
-parser.add_argument('-start', dest="DATE_START", default="2016-01-01", help="Date start")
-parser.add_argument('-end', dest="DATE_END", default="2016-12-31", help="Date end")
+parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/atmosphere-screen/frame%s.png", help="Output image file")
+parser.add_argument('-base', dest="BASE_IMAGE", default="../data/earth_base.png", help="Base image file")
+parser.add_argument('-grad', dest="GRADIENT_FILE", default="../data/colorGradientRainbowSaturated.json", help="Color gradient json file")
+parser.add_argument('-start', dest="DATE_START", default="2016-09-01", help="Date start")
+parser.add_argument('-end', dest="DATE_END", default="2016-11-30", help="Date end")
 parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
 parser.add_argument('-lat', dest="LAT_RANGE", default="90,-90", help="Latitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=72, help="Points per particle")
@@ -37,11 +36,11 @@ parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
-parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range (0-255)")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,60.0", help="Alpha range (0-255)")
 parser.add_argument('-avg', dest="ROLLING_AVERAGE", type=int, default=30, help="Do a rolling average of x data points")
-parser.add_argument('-dur', dest="DURATION", type=int, default=120, help="Duration in seconds")
+parser.add_argument('-dur', dest="DURATION", type=int, default=30, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=30, help="Frames per second")
-parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=2000, help="How many milliseconds each particle should animate over")
+parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=8000, help="How many milliseconds each particle should animate over")
 parser.add_argument('-line', dest="LINE_VISIBILITY", type=float, default=0.5, help="Higher = more visible lines")
 parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 parser.add_argument('-unit', dest="TEMPERATURE_UNIT", default="Kelvin", help="Temperature unit")
@@ -68,6 +67,7 @@ dateStart = datetime.date(DATE_START[0], DATE_START[1], DATE_START[2])
 dateEnd = datetime.date(DATE_END[0], DATE_END[1], DATE_END[2])
 
 params = {}
+
 params["date_start"] = dateStart
 params["date_end"] = dateEnd
 params["lon_range"] = [float(d) for d in args.LON_RANGE.strip().split(",")]
@@ -85,6 +85,11 @@ params["gradient"] = GRADIENT
 params["animation_dur"] = args.ANIMATION_DUR
 params["rolling_avg"] = args.ROLLING_AVERAGE
 params["line_visibility"] = args.LINE_VISIBILITY
+
+# open and resize base image
+baseImage = Image.open(args.BASE_IMAGE)
+baseImage = baseImage.resize((params["width"], params["height"]), resample=Image.BICUBIC)
+params["base_image"] = baseImage
 
 # Read data
 date = dateStart

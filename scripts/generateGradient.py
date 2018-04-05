@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# python generateGradient.py -grad "#0087ff,#00caab,#cdb300,#ff9d00,#fc0000" -out "../data/colorGradientRainbowSaturated.json"
+
 import argparse
 import json
 from pprint import pprint
