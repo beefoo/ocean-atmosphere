@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# python generateFrames.py -width 1024 -height 512
-# python generateFrames.py -debug 1 -out "../output/meta%s.png" -width 17280 -height 8640 -vel 0.2 -ppp 480 -particles 18000
+# python generateFrames.py -width 1024 -height 186
+# python generateFrames.py -debug 1 -out "../output/metascreen%s.png" -width 17280 -height 3240 -vel 0.2 -ppp 480 -particles 18000 -anim 15000
+# python generateFrames.py -width 17280 -height 3240 -vel 0.2 -ppp 480 -particles 18000 -anim 15000
 
 # ffmpeg -framerate 30/1 -i ../output/atmosphere-screen/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_screen_sample.mp4
 
@@ -36,7 +37,7 @@ parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target
 parser.add_argument('-height', dest="HEIGHT", type=int, default=384, help="Target image height")
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
-parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,60.0", help="Alpha range (0-255)")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,90.0", help="Alpha range (0-255)")
 parser.add_argument('-avg', dest="ROLLING_AVERAGE", type=int, default=30, help="Do a rolling average of x data points")
 parser.add_argument('-dur', dest="DURATION", type=int, default=30, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=30, help="Frames per second")
@@ -44,8 +45,9 @@ parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=8000, help=
 parser.add_argument('-line', dest="LINE_VISIBILITY", type=float, default=0.5, help="Higher = more visible lines")
 parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 parser.add_argument('-unit', dest="TEMPERATURE_UNIT", default="Kelvin", help="Temperature unit")
-parser.add_argument('-lat0', dest="LAT_START", type=float, default=50.0, help="90 to -90")
+parser.add_argument('-lat0', dest="LAT_START", type=float, default=40.0, help="90 to -90")
 parser.add_argument('-lat1', dest="LAT_END", type=float, default=30.0, help="90 to -90")
+parser.add_argument('-fade', dest="FADE_DURATION", type=int, default=4000, help="Milliseconds to fade in and out")
 
 args = parser.parse_args()
 
@@ -87,6 +89,8 @@ params["gradient"] = GRADIENT
 params["animation_dur"] = args.ANIMATION_DUR
 params["rolling_avg"] = args.ROLLING_AVERAGE
 params["line_visibility"] = args.LINE_VISIBILITY
+params["fade_ms"] = args.FADE_DURATION
+params["debug"] = (DEBUG > 0)
 
 # crop calculations
 latStart = norm(args.LAT_START, 90.0, -90.0)

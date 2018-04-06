@@ -122,8 +122,8 @@ def frameToImage(p):
     dataIndexB1 = dataIndexB0 + p["rolling_avg"]
     mu = dataProgress - dataIndexA0
 
-    yStart = lerp(p["y_from"], p["y_to"], p["progress"])
-    yEnd = yStart + p["cropped_height"]
+    yStart = round(lerp(p["y_from"], p["y_to"], p["progress"]))
+    yEnd = round(yStart + p["cropped_height"])
 
     f0 = getWrappedData(p["data"], dataCount, dataIndexA0, dataIndexA1)
     f1 = getWrappedData(p["data"], dataCount, dataIndexB0, dataIndexB1)
@@ -387,14 +387,16 @@ def getParticleData(data, p):
     dim = 4 # four points: x, y, alpha, width
 
     # fade in and out
-    animation_dur = p["animation_dur"]
+    fade_ms = p["fade_ms"]
     dur = p["duration_ms"]
     ms = p["ms"]
     fadeProgress = 1.0
-    if ms < animation_dur:
-        fadeProgress = 1.0 * ms / animation_dur
-    elif ms > (dur-animation_dur):
-        fadeProgress = 1.0 - 1.0 * (ms - (dur-animation_dur)) / animation_dur
+    if ms < fade_ms:
+        fadeProgress = 1.0 * ms / fade_ms
+    elif ms > (dur-fade_ms):
+        fadeProgress = 1.0 - 1.0 * (ms - (dur-fade_ms)) / fade_ms
+    if p["debug"]:
+        fadeProgress = 1.0
 
     offset = 1.0 - p["animationProgress"]
     tw = p["width"]
@@ -566,8 +568,8 @@ def getParticleData(data, p):
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
 
             // we are fading in/out
-            if (fadeProgress < 1.0 && fadeProgress < progressMultiplier) {
-                alpha = 0.0;
+            if (fadeProgress < 1.0) {
+                alpha = alpha * fadeProgress;
             }
 
             float x1 = x + u * velocityMult;
