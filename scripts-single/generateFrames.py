@@ -7,6 +7,9 @@
 # ffmpeg -framerate 30/1 -i ../output/atmosphere-single/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_single_sample.mp4
 # ffmpeg -framerate 30/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -s 1024x186 -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_sample.mp4
 
+# ffmpeg -i in.mp4 -filter:v "crop=80:60:200:100" -c:a copy out.mp4
+# ffmpeg -framerate 29.97/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -filter:v "crop=1920:1080:1920:0" -c:v libx264 -r 29.97 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_cropped_sample.mp4
+
 
 import argparse
 import datetime
@@ -40,7 +43,7 @@ parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Ma
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,90.0", help="Alpha range (0-255)")
 parser.add_argument('-dur', dest="DURATION", type=int, default=30, help="Duration in seconds")
 parser.add_argument('-fps', dest="FPS", type=int, default=29.97, help="Frames per second")
-parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=5000, help="How many milliseconds each particle should animate over")
+parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=4000, help="How many milliseconds each particle should animate over")
 parser.add_argument('-line', dest="LINE_VISIBILITY", type=float, default=0.5, help="Higher = more visible lines")
 parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 parser.add_argument('-unit', dest="TEMPERATURE_UNIT", default="Kelvin", help="Temperature unit")
@@ -95,15 +98,30 @@ params["y_from"] = latStart * params["height"]
 params["y_to"] = latEnd * params["height"]
 
 # open and resize base image
+print "Reading base image..."
 baseImage = Image.open(args.BASE_IMAGE)
 baseImage = baseImage.resize((params["width"], params["height"]), resample=Image.BICUBIC)
 params["base_image"] = baseImage
 
 # Read data
+print "Reading CSV data..."
 data = readCSVData({
     "filename": INPUT_FILE,
     "unit": TEMPERATURE_UNIT
 })
+
+# Offset the data
+print "Offsetting data..."
+offset = int(round(params["lon_range"][0] + 180.0))
+if offset != 0.0:
+    offset = int(round(offset / 360.0 * len(data[0])))
+data = offsetData(data, offset)
+
+# Retrieve colors
+print "Retrieving color data"
+colorImage = getTemperatureImage(data, params)
+colorImage = colorImage.resize((params["width"], params["height"]), resample=Image.BICUBIC)
+params["color_image"] = colorImage
 
 lats = len(data[0])
 lons = len(data[0][0])
@@ -144,7 +162,7 @@ for frame in range(frames):
         break
 
 print "Making %s image files asyncronously..." % frames
-pool = ThreadPool()
+pool = ThreadPool(2)
 data = pool.map(frameToImage, frameParams)
 pool.close()
 pool.join()

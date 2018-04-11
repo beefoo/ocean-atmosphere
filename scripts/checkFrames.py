@@ -40,7 +40,7 @@ print "Verifying %s files..." % len(filenames)
 for i, filename in enumerate(filenames):
     readImageFile(filename)
     sys.stdout.write('\r')
-    sys.stdout.write("%s%%" % round(1.0*(i+1)/count,1))
+    sys.stdout.write("%s%%" % round(1.0*(i+1)/count*100,1))
     sys.stdout.flush()
 
 print "Done."

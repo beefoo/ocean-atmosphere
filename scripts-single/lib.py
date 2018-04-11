@@ -116,24 +116,13 @@ def frameToImage(p):
     print "%s: processing data..." % p["fileOut"]
 
     data = p["data"]
+    baseImage = p["base_image"]
+    colorImage = p["color_image"]
+
     yStart = round(lerp(p["y_from"], p["y_to"], p["progress"]))
     yEnd = round(yStart + p["cropped_height"])
 
-    offset = int(round(p["lon_range"][0] + 180.0))
-    if offset != 0.0:
-        offset = int(round(offset / 360.0 * len(data[0])))
-    data = offsetData(data, offset)
-
-    baseImage = p["base_image"]
-
-    # Set up temperature background image
-    # print "%s: calculating temperature colors" % p["fileOut"]
-    colorImage = getTemperatureImage(data, p)
-    colorImage = colorImage.resize((p["width"], p["height"]), resample=Image.BICUBIC)
-    # baseImage = baseImage.convert(mode="RGBA")
-
-    # Setup particles
-    # print "%s: calculating particles..." % p["fileOut"]
+    print "%s: getting particle data..." % p["fileOut"]
     particles = getParticleData(data, p)
 
     print "%s: drawing particles..." % p["fileOut"]
@@ -305,6 +294,7 @@ def offsetData(data, offset=0):
 
     result = result.reshape(shape)
     return result
+
 
 def getParticleData(data, p):
     h = p["particles"]
