@@ -556,6 +556,10 @@ def getParticleData(data, p):
         float alphaMin = %f;
         float alphaMax = %f;
         float velocityMult = %f;
+        float lineWidthMin = %f;
+        float lineWidthMax = %f;
+        float lineWidthLatMin = %f;
+        float lineWidthLatMax = %f;
 
         // get current position
         int i = get_global_id(0);
@@ -574,7 +578,6 @@ def getParticleData(data, p):
             int dindex = lat * dw * 3 + lon * 3;
             float u = data[dindex+1];
             float v = data[dindex+2];
-            int thickness = 1;
 
             // check for invalid values
             if (u >= 999.0 || u <= -999.0) {
@@ -588,10 +591,17 @@ def getParticleData(data, p):
             float mag = sqrt(u * u + v * v);
             mag = norm(mag, magMin, magMax);
 
-            // determine alpha transparency based on magnitude and offset
+            // determine alpha transparency/thickness based on magnitude and offset
             float jp = (float) j / (float) (points-1);
             float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
+            float thickness = lerp(lineWidthMin, lineWidthMax, mag * progressMultiplier);
+
+            // adjust thickness based on latitude
+            float latMultiplier = (float) abs(lat - (dh/2)) / (float) (dh/2);
+            float thicknessMultiplier = lerp(lineWidthLatMin, lineWidthLatMax, latMultiplier);
+            thickness *= thicknessMultiplier;
+            if (thickness < 1.0) thickness = 1.0;
 
             float x1 = x + u * velocityMult;
             float y1 = y + (-v) * velocityMult;
@@ -616,21 +626,21 @@ def getParticleData(data, p):
             } else if (x1 < 0) {
                 float2 intersection = lineIntersection(x, y, x1, y1, (float) 0.0, (float) 0.0, (float) 0.0, th);
                 if (intersection.y > 0.0) {
-                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
-                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
+                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
+                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
                 }
 
             // wrap from right to left
             } else if (x1 > tw-1.0) {
                 float2 intersection = lineIntersection(x, y, x1, y1, (float) (tw-1.0), (float) 0.0, (float) (tw-1.0), th);
                 if (intersection.y > 0.0) {
-                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
-                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
+                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
+                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
                 }
 
             // draw it normally
             } else {
-                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, (int) th, round(alpha), thickness);
+                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, (int) th, round(alpha), (int) thickness);
             }
 
             // wrap x
@@ -642,7 +652,7 @@ def getParticleData(data, p):
             y = y1;
         }
     }
-    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"])
+    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"], p["linewidth_range"][0], p["linewidth_range"][1], p["linewidth_lat_range"][0], p["linewidth_lat_range"][1])
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()

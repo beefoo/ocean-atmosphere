@@ -7,7 +7,6 @@
 # ffmpeg -framerate 30/1 -i ../output/atmosphere-single/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_single_sample.mp4
 # ffmpeg -framerate 30/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -s 1024x186 -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_sample.mp4
 
-# ffmpeg -i in.mp4 -filter:v "crop=80:60:200:100" -c:a copy out.mp4
 # ffmpeg -framerate 29.97/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -filter:v "crop=1920:1080:1920:0" -c:v libx264 -r 29.97 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_cropped_sample.mp4
 
 

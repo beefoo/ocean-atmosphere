@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.6 -ppp 240 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -anim 1200 -debug 2
+# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.6 -ppp 240 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -anim 1200 -debug 1
 # python generateFrames.py -debug 1
 # python generateFrames.py -debug 1 -out "../output/meta%s.png" -width 17280 -height 8640 -vel 0.2 -ppp 480 -particles 18000
 
@@ -35,7 +35,8 @@ parser.add_argument('-particles', dest="PARTICLES", type=int, default=12000, hel
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-20.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
-parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,2.0", help="Line width range")
+parser.add_argument('-lwt', dest="LINE_WIDTH_LAT_RANGE", default="1.0,2.0", help="Line width range based on latitude")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range (0-255)")
 parser.add_argument('-avg', dest="ROLLING_AVERAGE", type=int, default=30, help="Do a rolling average of x data points")
@@ -77,6 +78,7 @@ params["velocity_multiplier"] = args.VELOCITY_MULTIPLIER
 params["particles"] = args.PARTICLES
 params["temperature_range"] = [float(d) for d in args.TEMPERATURE_RANGE.split(",")]
 params["linewidth_range"] = [float(d) for d in args.LINE_WIDTH_RANGE.split(",")]
+params["linewidth_lat_range"] = [float(d) for d in args.LINE_WIDTH_LAT_RANGE.split(",")]
 params["mag_range"] = [float(d) for d in args.MAGNITUDE_RANGE.split(",")]
 params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.split(",")]
 params["width"] = args.WIDTH

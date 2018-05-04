@@ -1,0 +1,60 @@
+<!doctype html>
+<html class="no-js" lang="">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Globe</title>
+  <link rel="stylesheet" href="css/vendor/normalize.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body style='margin: 0px; background-color: #000000; overflow: hidden;'>
+  <script src="js/vendor/jquery-3.3.1.min.js"></script>
+  <script src="js/vendor/underscore-min.js"></script>
+  <script src="js/vendor/three.min.js"></script>
+  <script src="js/vendor/three/OrbitControls.js"></script>
+
+  <script>
+    var renderer  = new THREE.WebGLRenderer({
+      antialias  : true
+    });
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    document.body.appendChild( renderer.domElement );
+    renderer.shadowMapEnabled  = true
+
+    var scene  = new THREE.Scene();
+    var camera  = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100 );
+    camera.position.z = 1;
+
+    var light  = new THREE.AmbientLight( 0x222222 )
+    scene.add( light )
+
+    var light  = new THREE.DirectionalLight( 0xffffff, 1 )
+    light.position.set(5,5,5)
+    scene.add( light );
+
+    var earthGeo = new THREE.SphereGeometry(0.25, 32, 32);
+    var earthMat = new THREE.MeshBasicMaterial();
+    var earth = new THREE.Mesh(earthGeo, earthMat);
+    scene.add(earth);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    function animate(){
+      renderer.render(scene, camera);
+      controls.update();
+      requestAnimationFrame(function(){ animate(); });
+    }
+
+    var earthTextureLoader = new THREE.TextureLoader();
+    earthTextureLoader.load('output/ocean/frame0001.png', function (texture) {
+      earth.material.map = texture;
+      earth.material.map.needsUpdate = true;
+      animate();
+    });
+
+  </script>
+
+
+
+</body>
+</html>
