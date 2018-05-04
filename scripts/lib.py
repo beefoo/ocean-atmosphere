@@ -457,9 +457,53 @@ def getParticleData(data, p):
         return value;
     }
 
-    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, float alpha);
+    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha, int thickness);
+    void drawSingleLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha);
 
-    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, float alpha) {
+    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha, int thickness) {
+        int dx = abs(x1-x0);
+        int dy = abs(y1-y0);
+
+        if (dx==0 && dy==0) {
+            return;
+        }
+
+        // draw the first line
+        drawSingleLine(p, x0, y0, x1, y1, w, h, alpha);
+
+        thickness--;
+        if (thickness < 1) return;
+
+        int stepX = 0;
+        int stepY = 0;
+        if (dx > dy) stepY = 1;
+        else stepX = 1;
+
+        // loop through thickness
+        int offset = 1;
+        for (int i=0; i<thickness; i++) {
+            int xd = stepX * offset;
+            int yd = stepY * offset;
+
+            drawSingleLine(p, x0+xd, y0+yd, x1+xd, y1+yd, w, h, alpha);
+
+            // alternate above and below
+            offset *= -1;
+            if (offset > 0) {
+                offset++;
+            }
+        }
+
+
+    }
+
+    void drawSingleLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha) {
+        // clamp
+        x0 = clamp(x0, 0, w-1);
+        x1 = clamp(x1, 0, w-1);
+        y0 = clamp(y0, 0, h-1);
+        y1 = clamp(y1, 0, h-1);
+
         int dx = abs(x1-x0);
         int dy = abs(y1-y0);
 
@@ -530,6 +574,7 @@ def getParticleData(data, p):
             int dindex = lat * dw * 3 + lon * 3;
             float u = data[dindex+1];
             float v = data[dindex+2];
+            int thickness = 1;
 
             // check for invalid values
             if (u >= 999.0 || u <= -999.0) {
@@ -571,21 +616,21 @@ def getParticleData(data, p):
             } else if (x1 < 0) {
                 float2 intersection = lineIntersection(x, y, x1, y1, (float) 0.0, (float) 0.0, (float) 0.0, th);
                 if (intersection.y > 0.0) {
-                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, round(alpha));
-                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, round(alpha));
+                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
+                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
                 }
 
             // wrap from right to left
             } else if (x1 > tw-1.0) {
                 float2 intersection = lineIntersection(x, y, x1, y1, (float) (tw-1.0), (float) 0.0, (float) (tw-1.0), th);
                 if (intersection.y > 0.0) {
-                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, round(alpha));
-                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, round(alpha));
+                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
+                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), thickness);
                 }
 
             // draw it normally
             } else {
-                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, round(alpha));
+                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, (int) th, round(alpha), thickness);
             }
 
             // wrap x
