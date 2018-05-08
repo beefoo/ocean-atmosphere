@@ -389,9 +389,53 @@ def getParticleData(data, p):
         return value;
     }
 
-    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, float alpha);
+    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha, int thickness);
+    void drawSingleLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha);
 
-    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, float alpha) {
+    void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha, int thickness) {
+        int dx = abs(x1-x0);
+        int dy = abs(y1-y0);
+
+        if (dx==0 && dy==0) {
+            return;
+        }
+
+        // draw the first line
+        drawSingleLine(p, x0, y0, x1, y1, w, h, alpha);
+
+        thickness--;
+        if (thickness < 1) return;
+
+        int stepX = 0;
+        int stepY = 0;
+        if (dx > dy) stepY = 1;
+        else stepX = 1;
+
+        // loop through thickness
+        int offset = 1;
+        for (int i=0; i<thickness; i++) {
+            int xd = stepX * offset;
+            int yd = stepY * offset;
+
+            drawSingleLine(p, x0+xd, y0+yd, x1+xd, y1+yd, w, h, alpha);
+
+            // alternate above and below
+            offset *= -1;
+            if (offset > 0) {
+                offset++;
+            }
+        }
+
+
+    }
+
+    void drawSingleLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha) {
+        // clamp
+        x0 = clamp(x0, 0, w-1);
+        x1 = clamp(x1, 0, w-1);
+        y0 = clamp(y0, 0, h-1);
+        y1 = clamp(y1, 0, h-1);
+
         int dx = abs(x1-x0);
         int dy = abs(y1-y0);
 
@@ -445,6 +489,10 @@ def getParticleData(data, p):
         float alphaMax = %f;
         float velocityMult = %f;
         float fadeProgress = %f;
+        float lineWidthMin = %f;
+        float lineWidthMax = %f;
+        float lineWidthLatMin = %f;
+        float lineWidthLatMax = %f;
 
         // get current position
         int i = get_global_id(0);
@@ -481,6 +529,13 @@ def getParticleData(data, p):
             float progressMultiplier = (jp + offset + doffset) - floor(jp + offset + doffset);
 
             float alpha = lerp(alphaMin, alphaMax, mag * progressMultiplier);
+            float thickness = lerp(lineWidthMin, lineWidthMax, mag * progressMultiplier);
+
+            // adjust thickness based on latitude
+            float latMultiplier = (float) abs(lat - (dh/2)) / (float) (dh/2);
+            float thicknessMultiplier = lerp(lineWidthLatMin, lineWidthLatMax, latMultiplier);
+            thickness *= thicknessMultiplier;
+            if (thickness < 1.0) thickness = 1.0;
 
             // we are fading in/out
             if (fadeProgress < 1.0) {
@@ -510,21 +565,21 @@ def getParticleData(data, p):
             } else if (x1 < 0) {
                 float2 intersection = lineIntersection(x, y, x1, y1, (float) 0.0, (float) 0.0, (float) 0.0, th);
                 if (intersection.y > 0.0) {
-                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, round(alpha));
-                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, round(alpha));
+                    drawLine(result, (int) round(x), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
+                    drawLine(result, (int) round((float) (tw-1.0) + x1), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
                 }
 
             // wrap from right to left
             } else if (x1 > tw-1.0) {
                 float2 intersection = lineIntersection(x, y, x1, y1, (float) (tw-1.0), (float) 0.0, (float) (tw-1.0), th);
                 if (intersection.y > 0.0) {
-                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, round(alpha));
-                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, round(alpha));
+                    drawLine(result, (int) round(x), (int) round(y), (int) (tw-1.0), (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
+                    drawLine(result, (int) round((float) x1 - (float)(tw-1.0)), (int) round(y), 0, (int) intersection.y, (int) tw, (int) th, round(alpha), (int) thickness);
                 }
 
             // draw it normally
             } else {
-                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, round(alpha));
+                drawLine(result, (int) round(x), (int) round(y), (int) round(x1), (int) round(y1), (int) tw, (int) th, round(alpha), (int) thickness);
             }
 
             // wrap x
@@ -536,7 +591,7 @@ def getParticleData(data, p):
             y = y1;
         }
     }
-    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"], fadeProgress)
+    """ % (w, dw, dh, tw, th, offset, p["mag_range"][0], p["mag_range"][1], p["alpha_range"][0], p["alpha_range"][1], p["velocity_multiplier"], fadeProgress, p["linewidth_range"][0], p["linewidth_range"][1], p["linewidth_lat_range"][0], p["linewidth_lat_range"][1])
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()

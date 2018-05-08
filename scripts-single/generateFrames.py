@@ -4,6 +4,8 @@
 # python generateFrames.py -debug 1 -out "../output/metascreen-single%s.png" -width 17280 -height 3240
 # caffeinate -i python generateFrames.py -width 17280 -height 3240 -out "/Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%s.png"
 
+# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_20161002.csv.gz -out ../output/perpetual/frame%s.png -vel 0.6 -ppp 240 -particles 60000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -height 1024 -latstart 90 -latend 90 -fade 0 -base ../data/earth_base_ocean.png -grad ../data/colorGradientOcean.json -debug 1
+
 # ffmpeg -framerate 30/1 -i ../output/atmosphere-single/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_single_sample.mp4
 # ffmpeg -framerate 30/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -s 1024x186 -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_sample.mp4
 
@@ -38,6 +40,7 @@ parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="0.0,38.0", help
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=384, help="Target image height")
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
+parser.add_argument('-lwt', dest="LINE_WIDTH_LAT_RANGE", default="1.0,1.0", help="Line width range based on latitude")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,90.0", help="Alpha range (0-255)")
 parser.add_argument('-dur', dest="DURATION", type=int, default=30, help="Duration in seconds")
@@ -46,8 +49,8 @@ parser.add_argument('-anim', dest="ANIMATION_DUR", type=int, default=4000, help=
 parser.add_argument('-line', dest="LINE_VISIBILITY", type=float, default=0.5, help="Higher = more visible lines")
 parser.add_argument('-debug', dest="DEBUG", type=int, default=0, help="If debugging, only output a subset of frames")
 parser.add_argument('-unit', dest="TEMPERATURE_UNIT", default="Kelvin", help="Temperature unit")
-parser.add_argument('-lat0', dest="LAT_START", type=float, default=40.0, help="90 to -90")
-parser.add_argument('-lat1', dest="LAT_END", type=float, default=35.0, help="90 to -90")
+parser.add_argument('-latstart', dest="LAT_START", type=float, default=40.0, help="90 to -90")
+parser.add_argument('-latend', dest="LAT_END", type=float, default=35.0, help="90 to -90")
 parser.add_argument('-fade', dest="FADE_DURATION", type=int, default=1000, help="Milliseconds to fade in and out")
 
 args = parser.parse_args()
@@ -74,6 +77,7 @@ params["velocity_multiplier"] = args.VELOCITY_MULTIPLIER
 params["particles"] = args.PARTICLES
 params["temperature_range"] = [float(d) for d in args.TEMPERATURE_RANGE.split(",")]
 params["linewidth_range"] = [float(d) for d in args.LINE_WIDTH_RANGE.split(",")]
+params["linewidth_lat_range"] = [float(d) for d in args.LINE_WIDTH_LAT_RANGE.split(",")]
 params["mag_range"] = [float(d) for d in args.MAGNITUDE_RANGE.split(",")]
 params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.split(",")]
 params["width"] = args.WIDTH

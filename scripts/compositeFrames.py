@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# python compositeFrames.py -width 2048
-# ffmpeg -framerate 30/1 -i ../output/composite/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/composite_sample.mp4
+# python compositeFrames.py -width 2048 -out "../output/composite_highres/frame%s.png"
+# ffmpeg -framerate 30/1 -i ../output/composite/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/composite.mp4
+# ffmpeg -framerate 30/1 -i ../output/composite_highres/frame%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/composite_highres.mp4
 
 import argparse
 import math
