@@ -128,10 +128,12 @@ def frameToImage(p):
         offset = int(round(offset / 360.0 * len(f0[0][0])))
     lerpedData = lerpData(f0, f1, mu, offset)
 
+    baseImage = getBaseImage(p["base_images"], p["progress"])
+
     # Set up temperature background image
     # print "%s: calculating temperature colors" % p["fileOut"]
-    baseImage = getTemperatureImage(lerpedData, p)
-    baseImage = baseImage.resize((p["width"], p["height"]), resample=Image.BICUBIC)
+    tempImage = getTemperatureImage(lerpedData, p)
+    tempImage = tempImage.resize((p["width"], p["height"]), resample=Image.BICUBIC)
     # baseImage = baseImage.convert(mode="RGBA")
 
     # Setup particles
@@ -139,24 +141,29 @@ def frameToImage(p):
     particles = getParticleData(lerpedData, p)
 
     print "%s: drawing particles..." % p["fileOut"]
-    updatedPx = addParticlesToImage(baseImage, particles, p)
+    updatedPx = addParticlesToImage(baseImage, tempImage, particles, p)
     im = Image.fromarray(updatedPx, mode="RGB")
 
     im.save(p["fileOut"])
     print "%s: finished." % p["fileOut"]
 
-def addParticlesToImage(im, particles, p):
-    px = np.array(im)
-    px = px.astype(np.uint8)
-    shape = px.shape
+def addParticlesToImage(base, temperature, particles, p):
+    basePx = np.array(base)
+    basePx = basePx.astype(np.uint8)
+
+    tempPx = np.array(temperature)
+    tempPx = tempPx.astype(np.uint8)
+
+    shape = basePx.shape
     h, w, dim = shape
 
-    px = px.reshape(-1)
+    basePx = basePx.reshape(-1)
+    tempPx = tempPx.reshape(-1)
     particles = particles.reshape(-1)
 
     # the kernel function
     src = """
-    __kernel void addParticles(__global uchar *base, __global uchar *particles, __global uchar *result){
+    __kernel void addParticles(__global uchar *base, __global uchar *colors, __global uchar *particles, __global uchar *result){
         int w = %d;
         int dim = %d;
         float power = 1.0 - %f; // lower number = more visible lines
@@ -167,33 +174,36 @@ def addParticlesToImage(im, particles, p):
         int j = posy * w + posx;
 
         float alpha = (float) particles[j] / 255.0;
-        // float white = 255.0;
-        // int r = 0;
-        // int g = 0;
-        // int b = 0;
-        int r = base[i];
-        int g = base[i+1];
-        int b = base[i+2];
+        int r = colors[i];
+        int g = colors[i+1];
+        int b = colors[i+2];
+        int baseR = base[i];
+        int baseG = base[i+1];
+        int baseB = base[i+2];
+
+        // temp hack, convert to grayscale
+        //float count = 3.0;
+        //int baseAvg = (int) round((float) ((float) baseR + (float) baseG + (float) baseB) / count);
+        //baseR = baseAvg;
+        //baseG = baseAvg;
+        //baseB = baseAvg;
 
         if (alpha > 0) {
             alpha = pow(alpha*alpha + alpha*alpha, power);
             if (alpha > 1.0) {
                 alpha = 1.0;
             }
-            // float inv = 1.0 - alpha;
-            // r = (int) round((white * alpha) + ((float) base[i] * inv));
-            // g = (int) round((white * alpha) + ((float) base[i+1] * inv));
-            // b = (int) round((white * alpha) + ((float) base[i+2] * inv));
-            r = (int) round((r * alpha));
-            g = (int) round((g * alpha));
-            b = (int) round((b * alpha));
+            //r = (int) round((r * alpha));
+            //g = (int) round((g * alpha));
+            //b = (int) round((b * alpha));
+            float inv = 1.0 - alpha;
+            r = (int) round(((float) r * alpha) + ((float) baseR * inv));
+            g = (int) round(((float) g * alpha) + ((float) baseG * inv));
+            b = (int) round(((float) b * alpha) + ((float) baseB * inv));
         } else {
-            // r = base[i];
-            // g = base[i+1];
-            // b = base[i+2];
-            r = 0;
-            g = 0;
-            b = 0;
+            r = baseR;
+            g = baseG;
+            b = baseB;
         }
 
         result[i] = r;
@@ -221,14 +231,15 @@ def addParticlesToImage(im, particles, p):
     # Kernel function instantiation
     prg = cl.Program(ctx, src).build()
 
-    inA =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=px)
-    inB =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=particles)
-    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, px.nbytes)
+    inA =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=basePx)
+    inB =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=tempPx)
+    inC =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=particles)
+    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, basePx.nbytes)
 
-    prg.addParticles(queue, [h, w], None , inA, inB, outResult)
+    prg.addParticles(queue, [h, w], None , inA, inB, inC, outResult)
 
     # Copy result
-    result = np.empty_like(px)
+    result = np.empty_like(basePx)
     cl.enqueue_copy(queue, result, outResult)
 
     result = result.reshape(shape)
@@ -375,6 +386,92 @@ def lerpData(dataA, dataB, mu, offset=0):
 
     result = result.reshape(shape)
     return result;
+
+# Interpolate between two images using GPU
+def lerpImage(imA, imB, mu):
+    # read pixels and floats
+    pxA = np.array(imA)
+    pxA = pxA.astype(np.uint8)
+    pxB = np.array(imB)
+    pxB = pxB.astype(np.uint8)
+
+    shape = pxA.shape
+    h, w, dim = shape
+
+    pxA = pxA.reshape(-1)
+    pxB = pxB.reshape(-1)
+
+    # the kernel function
+    src = """
+    __kernel void lerpImage(__global uchar *a, __global uchar *b, __global float *mu, __global uchar *result){
+        int w = %d;
+        int dim = %d;
+        float m = *mu;
+        int posx = get_global_id(1);
+        int posy = get_global_id(0);
+        int i = posy * w * dim + posx * dim;
+        result[i] = a[i] + m * (b[i]-a[i]);
+        result[i+1] = a[i+1] + m * (b[i+1]-a[i+1]);
+        result[i+2] = a[i+2] + m * (b[i+2]-a[i+2]);
+    }
+    """ % (w, dim)
+
+    # Get platforms, both CPU and GPU
+    plat = cl.get_platforms()
+    GPUs = plat[0].get_devices(device_type=cl.device_type.GPU)
+    CPU = plat[0].get_devices()
+
+    # prefer GPUs
+    if GPUs and len(GPUs) > 0:
+        ctx = cl.Context(devices=GPUs)
+    else:
+        print "Warning: using CPU"
+        ctx = cl.Context(CPU)
+
+    # Create queue for each kernel execution
+    queue = cl.CommandQueue(ctx)
+    mf = cl.mem_flags
+
+    # Kernel function instantiation
+    prg = cl.Program(ctx, src).build()
+
+    inA =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=pxA)
+    inB =  cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=pxB)
+    inMu = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=np.float32(mu))
+    outResult = cl.Buffer(ctx, mf.WRITE_ONLY, pxA.nbytes)
+
+    prg.lerpImage(queue, shape, None , inA, inB, inMu, outResult)
+
+    # Copy result
+    result = np.empty_like(pxA)
+    cl.enqueue_copy(queue, result, outResult)
+
+    result = result.reshape(shape)
+    imOut = Image.fromarray(result, mode="RGB")
+    return imOut
+
+def getBaseImage(images, progress):
+    imageCount = len(images)
+    index = 1.0 * imageCount * progress
+    indexA = int(math.floor(index))
+    indexB = int(math.ceil(index))
+    mu = index - indexA
+    image = False
+
+    if indexA >= imageCount:
+        indexA = 0
+    if indexB >= imageCount:
+        indexB = 0
+
+    # no lerping required, just return the image data
+    if indexA == indexB:
+        image = images[indexA]
+
+    # lerp the images
+    else:
+        image = lerpImage(images[indexA], images[indexB], mu)
+
+    return image
 
 def getParticleData(data, p):
     h = p["particles"]

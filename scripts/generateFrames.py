@@ -16,7 +16,7 @@ import math
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 from pprint import pprint
 import random
 import sys
@@ -25,7 +25,10 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-in', dest="INPUT_FILE", default="../data/raw/atmosphere_100000/gfsanl_4_%s_0000_000.csv.gz", help="Input CSV files")
 parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/atmosphere/frame%s.png", help="Output image file")
-parser.add_argument('-grad', dest="GRADIENT_FILE", default="../data/colorGradientRainbow.json", help="Color gradient json file")
+parser.add_argument('-base', dest="BASE_IMAGE", default="../data/bluemarble/world.2004%s.3x5400x2700.png", help="Base image file")
+parser.add_argument('-brightness', dest="BASE_IMAGE_BRIGHTNESS", default=0.4, help="Base image brightness")
+parser.add_argument('-saturation', dest="BASE_IMAGE_SATURATION", default=0.5, help="Base image saturation")
+parser.add_argument('-grad', dest="GRADIENT_FILE", default="../data/colorGradientRainbowLong.json", help="Color gradient json file")
 parser.add_argument('-start', dest="DATE_START", default="2016-01-01", help="Date start")
 parser.add_argument('-end', dest="DATE_END", default="2016-12-31", help="Date end")
 parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
@@ -33,7 +36,7 @@ parser.add_argument('-lat', dest="LAT_RANGE", default="90,-90", help="Latitude r
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=72, help="Points per particle")
 parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.08, help="Number of pixels per degree of lon/lat")
 parser.add_argument('-particles', dest="PARTICLES", type=int, default=12000, help="Number of particles to display")
-parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-20.0,40.0", help="Temperature range used for color gradient")
+parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-19.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,2.0", help="Line width range")
@@ -53,6 +56,7 @@ args = parser.parse_args()
 
 INPUT_FILE = args.INPUT_FILE
 OUTPUT_FILE = args.OUTPUT_FILE
+BASE_IMAGE = args.BASE_IMAGE
 GRADIENT_FILE = args.GRADIENT_FILE
 DATE_START = [int(d) for d in args.DATE_START.split("-")]
 DATE_END = [int(d) for d in args.DATE_END.split("-")]
@@ -68,6 +72,26 @@ with open(GRADIENT_FILE) as f:
 
 dateStart = datetime.date(DATE_START[0], DATE_START[1], DATE_START[2])
 dateEnd = datetime.date(DATE_END[0], DATE_END[1], DATE_END[2])
+
+# # preload base images
+# print "Pre-loading base images..."
+# baseImages = []
+#
+# for i in range(12):
+#     month = str(i + 1).zfill(2)
+#     filename = BASE_IMAGE % month
+#     baseImage = Image.open(filename)
+#     baseImage = baseImage.resize((args.WIDTH, args.HEIGHT), resample=Image.BICUBIC)
+#
+#     filter = ImageEnhance.Color(baseImage)
+#     baseImage = filter.enhance(args.BASE_IMAGE_SATURATION)
+#
+#     filter = ImageEnhance.Brightness(baseImage)
+#     baseImage = filter.enhance(args.BASE_IMAGE_BRIGHTNESS)
+#
+#     baseImages.append(baseImage)
+
+baseImages = [Image.new('RGB', (args.WIDTH, args.HEIGHT), (0, 0, 0))]
 
 params = {}
 params["date_start"] = dateStart
@@ -88,6 +112,7 @@ params["gradient"] = GRADIENT
 params["animation_dur"] = args.ANIMATION_DUR
 params["rolling_avg"] = args.ROLLING_AVERAGE
 params["line_visibility"] = args.LINE_VISIBILITY
+params["base_images"] = baseImages
 
 # Read data
 date = dateStart

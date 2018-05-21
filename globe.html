@@ -46,7 +46,7 @@
     }
 
     var earthTextureLoader = new THREE.TextureLoader();
-    earthTextureLoader.load('output/ocean/frame0001.png', function (texture) {
+    earthTextureLoader.load('output/atmosphere/frame0001.png', function (texture) {
       earth.material.map = texture;
       earth.material.map.needsUpdate = true;
       animate();

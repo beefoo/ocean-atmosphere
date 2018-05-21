@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # python generateGradient.py -grad "#0087ff,#00caab,#cdb300,#ff9d00,#fc0000" -out "../data/colorGradientRainbowSaturated.json"
+# python generateGradient.py -grad "#42a6ff,#5994af,#9e944f,#c17700,#fc0000" -out "../data/colorGradientRainbow.json"
 # python generateGradient.py -grad "#8196cc,#ffffff" -out "../data/colorGradientOcean.json"
 
 import argparse
@@ -9,9 +10,9 @@ from pprint import pprint
 import sys
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-grad', dest="GRADIENT", default="#42a6ff,#5994af,#9e944f,#c17700,#fc0000", help="Color gradient")
+parser.add_argument('-grad', dest="GRADIENT", default="#be9cd6,#827de5,#47d0c8,#ced73a,#d7933a,#d73a3a,#f10c0c", help="Color gradient")
 parser.add_argument('-width', dest="STEPS", type=int, default=100, help="Steps in gradient")
-parser.add_argument('-out', dest="OUTPUT_FILE", default="../data/colorGradientRainbow.json", help="Output JSON file")
+parser.add_argument('-out', dest="OUTPUT_FILE", default="../data/colorGradientRainbowLong.json", help="Output JSON file")
 
 args = parser.parse_args()
 
