@@ -4,7 +4,8 @@
 # python generateFrames.py -debug 1 -out "../output/metascreen-single%s.png" -width 17280 -height 3240
 # caffeinate -i python generateFrames.py -width 17280 -height 3240 -out "/Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%s.png"
 
-# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_20161002.csv.gz -out ../output/perpetual/frame%s.png -vel 0.6 -ppp 240 -particles 60000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -height 1024 -latstart 90 -latend 90 -fade 0 -base ../data/earth_base_ocean.png -grad ../data/colorGradientOcean.json -debug 1
+# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_20161002.csv.gz -out ../output/perpetual/frame%s.png -vel 0.3 -ppp 600 -particles 100000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -width 4096 -height 2048 -latstart 90 -latend 90 -fade 0 -base ../data/world.200410.3x5400x2700.png -grad ../data/colorGradientOcean.json -anim 2000 -fps 30 -debug 1
+# ffmpeg -framerate 30/1 -i ../output/perpetual/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/ocean_2018-05-08.mp4
 
 # ffmpeg -framerate 30/1 -i ../output/atmosphere-single/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_single_sample.mp4
 # ffmpeg -framerate 30/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -s 1024x186 -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_sample.mp4
@@ -39,7 +40,7 @@ parser.add_argument('-particles', dest="PARTICLES", type=int, default=60000, hel
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="0.0,38.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=384, help="Target image height")
-parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,2.0", help="Line width range")
 parser.add_argument('-lwt', dest="LINE_WIDTH_LAT_RANGE", default="1.0,1.0", help="Line width range based on latitude")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,90.0", help="Alpha range (0-255)")

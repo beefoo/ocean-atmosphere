@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # python generateGradient.py -grad "#0087ff,#00caab,#cdb300,#ff9d00,#fc0000" -out "../data/colorGradientRainbowSaturated.json"
-# python generateGradient.py -grad "#336c90,#ffffff" -out "../data/colorGradientOcean.json"
+# python generateGradient.py -grad "#8196cc,#ffffff" -out "../data/colorGradientOcean.json"
 
 import argparse
 import json
