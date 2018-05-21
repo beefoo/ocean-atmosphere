@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-in', dest="INPUT_FILE", default="../data/raw/atmosphere_100000/gfsanl_4_%s_0000_000.csv.gz", help="Input CSV files")
 parser.add_argument('-out', dest="OUTPUT_FILE", default="../output/atmosphere/frame%s.png", help="Output image file")
-parser.add_argument('-base', dest="BASE_IMAGE", default="../data/bluemarble/world.2004%s.3x5400x2700.png", help="Base image file")
+parser.add_argument('-base', dest="BASE_IMAGE", default="../data/earth_base_small.png", help="Base image file")
 parser.add_argument('-brightness', dest="BASE_IMAGE_BRIGHTNESS", default=0.4, help="Base image brightness")
 parser.add_argument('-saturation', dest="BASE_IMAGE_SATURATION", default=0.5, help="Base image saturation")
 parser.add_argument('-grad', dest="GRADIENT_FILE", default="../data/colorGradientRainbowLong.json", help="Color gradient json file")
@@ -91,7 +91,11 @@ dateEnd = datetime.date(DATE_END[0], DATE_END[1], DATE_END[2])
 #
 #     baseImages.append(baseImage)
 
-baseImages = [Image.new('RGB', (args.WIDTH, args.HEIGHT), (0, 0, 0))]
+# baseImages = [Image.new('RGB', (args.WIDTH, args.HEIGHT), (0, 0, 0))]
+
+baseImage = Image.open(args.BASE_IMAGE)
+baseImage = baseImage.resize((args.WIDTH, args.HEIGHT), resample=Image.BICUBIC)
+baseImages = [baseImage]
 
 params = {}
 params["date_start"] = dateStart
