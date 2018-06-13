@@ -4,8 +4,8 @@
 # python generateFrames.py -debug 1 -out "../output/metascreen-single%s.png" -width 17280 -height 3240
 # caffeinate -i python generateFrames.py -width 17280 -height 3240 -out "/Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%s.png"
 
-# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_20161002.csv.gz -out ../output/perpetual/frame%s.png -vel 0.3 -ppp 600 -particles 100000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -width 4096 -height 2048 -latstart 90 -latend 90 -fade 0 -base ../data/world.200410.3x5400x2700.png -grad ../data/colorGradientOcean.json -anim 2000 -fps 30 -debug 1
-# ffmpeg -framerate 30/1 -i ../output/perpetual/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/ocean_2018-05-08.mp4
+# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_20161002.csv.gz -out ../output/perpetual/frame.%s.png -vel 0.3 -ppp 800 -particles 160000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -width 8192 -height 4096 -lw " 4.0,12.0" -latstart 90 -latend 90 -fade 0 -base ../data/bluemarble/world.200410.3x5400x2700.png -grad ../data/colorGradientOcean.json -anim 1000 -fps 30 -debug 1
+# ffmpeg -framerate 30/1 -i ../output/perpetual/frame.%03d.png -vf scale=4096:2048 -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/ocean_2018-06-01.mp4
 
 # ffmpeg -framerate 30/1 -i ../output/atmosphere-single/frame%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_single_sample.mp4
 # ffmpeg -framerate 30/1 -i /Volumes/youaremyjoy/HoPE/metatest_2018-04-13/frames/frame%03d.png -s 1024x186 -c:v libx264 -r 30 -pix_fmt yuv420p -q:v 1 ../output/atmosphere_meta_sample.mp4
@@ -36,6 +36,7 @@ parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude r
 parser.add_argument('-lat', dest="LAT_RANGE", default="90,-90", help="Latitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=1000, help="Points per particle")
 parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.04, help="Number of pixels per degree of lon/lat")
+parser.add_argument('-minstep', dest="MIN_STEP", type=float, default=0.0, help="Minimum number of pixel per step")
 parser.add_argument('-particles', dest="PARTICLES", type=int, default=60000, help="Number of particles to display")
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="0.0,38.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
@@ -75,12 +76,13 @@ params["lon_range"] = [float(d) for d in args.LON_RANGE.strip().split(",")]
 params["lat_range"] = [float(d) for d in args.LAT_RANGE.strip().split(",")]
 params["points_per_particle"] = args.POINTS_PER_PARTICLE
 params["velocity_multiplier"] = args.VELOCITY_MULTIPLIER
+params["min_step"] = args.MIN_STEP
 params["particles"] = args.PARTICLES
-params["temperature_range"] = [float(d) for d in args.TEMPERATURE_RANGE.split(",")]
-params["linewidth_range"] = [float(d) for d in args.LINE_WIDTH_RANGE.split(",")]
-params["linewidth_lat_range"] = [float(d) for d in args.LINE_WIDTH_LAT_RANGE.split(",")]
-params["mag_range"] = [float(d) for d in args.MAGNITUDE_RANGE.split(",")]
-params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.split(",")]
+params["temperature_range"] = [float(d) for d in args.TEMPERATURE_RANGE.strip().split(",")]
+params["linewidth_range"] = [float(d) for d in args.LINE_WIDTH_RANGE.strip().split(",")]
+params["linewidth_lat_range"] = [float(d) for d in args.LINE_WIDTH_LAT_RANGE.strip().split(",")]
+params["mag_range"] = [float(d) for d in args.MAGNITUDE_RANGE.strip().split(",")]
+params["alpha_range"] = [float(d) for d in args.ALPHA_RANGE.strip().split(",")]
 params["width"] = args.WIDTH
 params["height"] = args.WIDTH / 2
 params["cropped_height"] = args.HEIGHT

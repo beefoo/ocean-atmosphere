@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # caffeinate -i python generateFrames.py
-# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.6 -ppp 240 -particles 18000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -debug 1
+# python generateFrames.py -in ../data/raw/ocean/oscar_vel2016_%s.csv.gz -out ../output/ocean/frame%s.png -vel 0.6 -ppp 240 -particles 36000 -mag " 0.0,1.0" -line 0.8 -unit Celsius -lon " -180,180" -debug 1
 # python generateFrames.py -debug 1
 # python generateFrames.py -debug 1 -out "../output/meta%s.png" -width 17280 -height 8640 -vel 0.2 -ppp 480 -particles 18000
 
@@ -35,11 +35,11 @@ parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude r
 parser.add_argument('-lat', dest="LAT_RANGE", default="90,-90", help="Latitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=72, help="Points per particle")
 parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.08, help="Number of pixels per degree of lon/lat")
-parser.add_argument('-particles', dest="PARTICLES", type=int, default=12000, help="Number of particles to display")
+parser.add_argument('-particles', dest="PARTICLES", type=int, default=24000, help="Number of particles to display")
 parser.add_argument('-range', dest="TEMPERATURE_RANGE", default="-19.0,40.0", help="Temperature range used for color gradient")
 parser.add_argument('-width', dest="WIDTH", type=int, default=2048, help="Target image width")
 parser.add_argument('-height', dest="HEIGHT", type=int, default=1024, help="Target image height")
-parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,2.0", help="Line width range")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,3.0", help="Line width range")
 parser.add_argument('-lwt', dest="LINE_WIDTH_LAT_RANGE", default="1.0,2.0", help="Line width range based on latitude")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range (0-255)")
